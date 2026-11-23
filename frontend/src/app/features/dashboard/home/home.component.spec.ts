@@ -288,49 +288,44 @@ describe('HomeComponent', () => {
     expect(rows.map((r) => r.getAttribute('data-level'))).toEqual(['over', 'ok', 'untracked']);
   });
 
-  const openTodo = () => {
-    (el().querySelector('[data-todo-toggle]') as HTMLButtonElement).click();
+  const todoKeys = () => Array.from(el().querySelectorAll('[data-card="todo"] .ticket-key')).map((n) => n.textContent?.trim());
+  const toggleTodo = (key: string) => {
+    (el().querySelector(`[data-todo-toggle="${key}"]`) as HTMLButtonElement).click();
     fixture.detectChanges();
   };
-
-  it('keeps the To Do card folded by default, with the count, and unfolds on toggle', () => {
-    expect(el().querySelector('[data-card="todo"] .ticket-row')).toBeNull();
-    expect(el().querySelector('[data-todo-toggle] .count-pill')?.textContent?.trim()).toBe('2');
-    openTodo();
-    expect(el().querySelectorAll('[data-card="todo"] .ticket-row').length).toBe(2);
-    openTodo();
-    expect(el().querySelector('[data-card="todo"] .ticket-row')).toBeNull();
-  });
+  const withRelated = (related: ReturnType<typeof card>[]) => {
+    dashboard.getBoard.and.returnValue(of({ ...BOARD, related }));
+    fixture.componentInstance['loadBoard']();
+    fixture.detectChanges();
+  };
+  const sub = (n: number) => card({ issueKey: `OMS-${n}`, status: 'To Do', parentKey: 'OMS-30', parentSummary: 'p', parentStatus: 'To Do', relation: 'subtask' });
 
   it('lists To Do tickets in their own card with a Code Process move and no budget', () => {
-    openTodo();
-    const rows = Array.from(el().querySelectorAll('[data-card="todo"] .ticket-row'));
-    expect(rows.map((r) => r.querySelector('.ticket-key')?.textContent?.trim())).toEqual(['OMS-30', 'CORE-31']);
+    expect(todoKeys()).toEqual(['CORE-31', 'OMS-30']);
     expect(el().querySelector('[data-card="todo"] .budget-bar')).toBeNull();
     // To Do tickets never count as working or over budget.
     expect(stat('active')).toBe('3');
+    expect(el().querySelector('[data-todo-count]')?.textContent?.trim()).toBe('2');
   });
 
-  it('also lists To Do subtasks that only come from the related list', () => {
-    openTodo();
-    dashboard.getBoard.and.returnValue(
-      of({ ...BOARD, related: [card({ issueKey: 'OMS-31', status: 'To Do', parentKey: 'OMS-30', parentSummary: 'p', parentStatus: 'To Do' })] }),
-    );
-    fixture.componentInstance['loadBoard']();
-    fixture.detectChanges();
-    const keys = Array.from(el().querySelectorAll('[data-card="todo"] .ticket-key')).map((n) => n.textContent?.trim());
-    expect(keys).toContain('OMS-31');
+  it('folds subtasks per parent by default, smallest key first once unfolded', () => {
+    withRelated([sub(31), sub(9), sub(100)]);
+    expect(todoKeys()).not.toContain('OMS-31');
+    expect(el().querySelector('[data-todo-toggle="OMS-30"] .count-pill')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('3 subtask');
+    toggleTodo('OMS-30');
+    expect(todoKeys()).toEqual(['CORE-31', 'OMS-30', 'OMS-9', 'OMS-31', 'OMS-100']);
+    toggleTodo('OMS-30');
+    expect(todoKeys()).toEqual(['CORE-31', 'OMS-30']);
   });
 
   it('moves a To Do ticket to Code Process after confirmation', async () => {
-    openTodo();
     confirm.ask.and.resolveTo(true);
     dashboard.transitionTicket.and.returnValue(of({ message: 'ok' }));
 
     (el().querySelector('[data-card="todo"] .ticket-actions .btn-soft') as HTMLButtonElement).click();
     await fixture.whenStable();
 
-    expect(dashboard.transitionTicket).toHaveBeenCalledWith('OMS-30', 'code-process');
+    expect(dashboard.transitionTicket).toHaveBeenCalledWith('CORE-31', 'code-process');
   });
 
   it('groups every ticket by status in workflow order', () => {

@@ -81,21 +81,10 @@
         <span class="card-icon accent"><app-icon name="layers" [size]="20" /></span>
         <div>
           <h2>Akan dikerjakan</h2>
-          <p>Tiket To Do kamu — geser ke Code Process saat mulai. Belum dihitung ke budget.</p>
+          <p>Tiket To Do kamu — geser ke Code Process saat mulai. Subtask terlipat per parent. Belum dihitung ke budget.</p>
         </div>
-        <button
-          type="button"
-          class="btn btn-sm btn-ghost fold-btn"
-          data-todo-toggle
-          [attr.aria-expanded]="todoOpen()"
-          [title]="todoOpen() ? 'Lipat daftar' : 'Buka daftar'"
-          (click)="todoOpen.set(!todoOpen())"
-        >
-          <span class="count-pill"><strong>{{ boardLoading() ? '–' : todo().length }}</strong></span>
-          <app-icon name="chevron-down" [size]="16" [style.transform]="todoOpen() ? 'rotate(180deg)' : 'none'" />
-        </button>
+        <span class="count-pill fold-btn" data-todo-count><strong>{{ boardLoading() ? '–' : todo().length }}</strong></span>
       </header>
-      @if (todoOpen()) {
 
       @if (boardLoading()) {
         <div class="table-skeleton" aria-busy="true">
@@ -121,20 +110,25 @@
                 @if (n.parentStatus) {
                   <span class="status-chip">{{ n.parentStatus }}</span>
                 }
+                <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n }" />
               </li>
             }
             @if (n.branches.length) {
-              <li class="ticket-branches">
-                <ul>
-                  @for (b of n.branches; track b.issueKey) {
-                    <ng-container *ngTemplateOutlet="todoRow; context: { $implicit: b, i: i, branch: true }" />
-                  }
-                </ul>
-              </li>
+              @if (n.head) {
+                <li class="ticket-parent-fold"><ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n }" /></li>
+              }
+              @if (isTodoOpen(n.key)) {
+                <li class="ticket-branches" [attr.data-branches-of]="n.key">
+                  <ul>
+                    @for (b of n.branches; track b.issueKey) {
+                      <ng-container *ngTemplateOutlet="todoRow; context: { $implicit: b, i: i, branch: true }" />
+                    }
+                  </ul>
+                </li>
+              }
             }
           }
         </ul>
-      }
       }
     </section>
   }
@@ -478,4 +472,19 @@
                 </button>
               </div>
             </li>
+</ng-template>
+
+<!-- Per-parent fold of the To Do subtasks (folded by default) -->
+<ng-template #todoFold let-n>
+  <button
+    type="button"
+    class="btn btn-sm btn-ghost fold-btn"
+    [attr.data-todo-toggle]="n.key"
+    [attr.aria-expanded]="isTodoOpen(n.key)"
+    [title]="isTodoOpen(n.key) ? 'Lipat subtask' : 'Buka subtask'"
+    (click)="toggleTodo(n.key)"
+  >
+    <span class="count-pill"><strong>{{ n.branches.length }}</strong> subtask</span>
+    <app-icon name="chevron-down" [size]="16" [style.transform]="isTodoOpen(n.key) ? 'rotate(180deg)' : 'none'" />
+  </button>
 </ng-template>

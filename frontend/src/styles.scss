@@ -835,7 +835,7 @@ tr.clickable:hover td { background: var(--surface-2); }
 
   &.with-actions { flex-wrap: wrap; align-items: center; }
   &.with-actions > .icon-btn { margin-left: auto; }
-  &.with-actions > .fold-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+  &.with-actions > .fold-btn { margin-left: auto; }
 }
 
 .card-icon {
@@ -1784,6 +1784,9 @@ table.admin-users {
 .ticket-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 
 /* Subtask / linked item branches (Tech Spec "Subtask & Linked Item Branches") */
+.fold-btn { display: inline-flex; align-items: center; gap: 8px; }
+.ticket-parent > .fold-btn { margin-left: auto; }
+.ticket-parent-fold { display: flex; justify-content: flex-end; list-style: none; margin-top: -4px; }
 .ticket-parent {
   display: flex;
   align-items: center;
