@@ -115,15 +115,13 @@
               </li>
             }
             @if (n.branches.length) {
-              @if (isOpen('todo', n.key)) {
-                <li class="ticket-branches" [attr.data-branches-of]="n.key">
+                <li class="ticket-branches" [class.closed]="!isOpen('todo', n.key)" [attr.inert]="isOpen('todo', n.key) ? null : ''" [attr.data-branches-of]="n.key">
                   <ul>
                     @for (b of n.branches; track b.issueKey) {
                       <ng-container *ngTemplateOutlet="todoRow; context: { $implicit: b, i: i, branch: true }" />
                     }
                   </ul>
                 </li>
-              }
             }
           }
         </ul>
@@ -367,15 +365,13 @@
               </li>
             }
             @if (n.branches.length) {
-              @if (isOpen(scope, n.key)) {
-                <li class="ticket-branches">
+                <li class="ticket-branches" [class.closed]="!isOpen(scope, n.key)" [attr.inert]="isOpen(scope, n.key) ? null : ''">
                   <ul>
                     @for (b of n.branches; track b.issueKey) {
                       <ng-container *ngTemplateOutlet="ticketRow; context: { $implicit: b, i: i, review: review, branch: true }" />
                     }
                   </ul>
                 </li>
-              }
             }
 </ng-template>
 
