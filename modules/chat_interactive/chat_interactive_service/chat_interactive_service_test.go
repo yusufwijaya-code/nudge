@@ -496,6 +496,17 @@ func TestGeser_ReminderButtonsUseTheWorkflowCaseInsensitively(t *testing.T) {
 	}
 }
 
+func TestGeser_CodeProcessMovesAToDoTicketIntoCodeProcess(t *testing.T) {
+	f := newFixture()
+	f.dash.transitions["CORE-1"] = user_dashboard_dto.TicketTransitions{IssueKey: "CORE-1", CurrentStatus: "To Do", Transitions: []user_dashboard_dto.TransitionOption{
+		{ID: "31", ToStatus: "Code Process"},
+	}}
+	res := f.svc.Geser(context.Background(), dev, "CORE-1", "code-process")
+	if !res.OK || f.dash.moved[0] != "CORE-1>31" {
+		t.Errorf("res=%+v moved=%v", res, f.dash.moved)
+	}
+}
+
 func TestGeser_CodeCompletedFollowsEachProjectsDoneStatus(t *testing.T) {
 	f := newFixture()
 	f.dash.transitions["CORE-1"] = user_dashboard_dto.TicketTransitions{IssueKey: "CORE-1", CurrentStatus: "CODE REVIEW", Transitions: []user_dashboard_dto.TransitionOption{

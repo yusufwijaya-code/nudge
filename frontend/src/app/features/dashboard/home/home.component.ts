@@ -22,6 +22,7 @@ import { activeUntil } from '../settings/mute-panel.component';
 
 const CODE_PROCESS = 'code process';
 const CODE_REVIEW = 'code review';
+const TODO = 'to do';
 const STATUS_ORDER = ['to do', 'code process', 'code review'];
 const GROUP_PREVIEW = 5;
 /** The poller updates sessions every 10s; 30s keeps the page current cheaply. */
@@ -240,6 +241,12 @@ export class HomeComponent {
       ),
     ),
   );
+
+  /**
+   * To Do tickets: only here to be moved quickly into Code Process. They have
+   * no session, so they never feed budget, stats or the sprint report.
+   */
+  protected todo = computed<TicketCard[]>(() => this.cards().filter((c) => c.status.toLowerCase() === TODO));
 
   /** The same rows as parent → branch trees. */
   protected activeTree = computed(() => toTree(this.active()));
@@ -466,7 +473,7 @@ export class HomeComponent {
   }
 
   protected async move(ticket: TicketCard, target: TransitionTarget): Promise<void> {
-    const labels: Record<TransitionTarget, string> = { 'code-review': 'Code Review', 'code-completed': 'Code Completed', todo: 'To Do' };
+    const labels: Record<TransitionTarget, string> = { 'code-process': 'Code Process', 'code-review': 'Code Review', 'code-completed': 'Code Completed', todo: 'To Do' };
     const label = labels[target];
     const confirmed = await this.confirm.ask({
       title: `Geser ke ${label}?`,
