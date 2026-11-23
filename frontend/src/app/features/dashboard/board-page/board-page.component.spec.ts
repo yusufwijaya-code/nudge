@@ -520,6 +520,19 @@ describe('BoardPageComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-transition="31"]')).not.toBeNull();
   });
 
+  it('lists subtasks under a parent smallest key first, whatever order Jira returns them', () => {
+    const fixture = TestBed.createComponent(BoardPageComponent);
+    fixture.detectChanges();
+    const child = (n: number) => ({ issueKey: `CORE-${n}`, summary: `c${n}`, status: 'To Do', issueURL: `https://x/browse/CORE-${n}`, boardId: 26, storyPoints: 1, parentKey: 'CORE-1', relation: 'subtask' });
+    http.expectOne((r) => r.url.endsWith('/api/dashboard/board')).flush({
+      columns: [{ status: 'Code Process', cards: [{ issueKey: 'CORE-1', summary: 'Parent', status: 'Code Process', issueURL: 'https://x/browse/CORE-1', boardId: 26, storyPoints: 5 }] }],
+      related: [child(11283), child(11259), child(11272), child(9999)],
+    });
+    fixture.detectChanges();
+    const keys = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('[data-branch]')).map((n) => n.getAttribute('data-branch'));
+    expect(keys).toEqual(['CORE-9999', 'CORE-11259', 'CORE-11272', 'CORE-11283']);
+  });
+
   it('shows subtask progress on the parent and collapses its branches', () => {
     const fixture = renderWithBranch();
     const el: HTMLElement = fixture.nativeElement;

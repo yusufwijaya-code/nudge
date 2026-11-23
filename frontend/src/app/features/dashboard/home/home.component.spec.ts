@@ -296,6 +296,16 @@ describe('HomeComponent', () => {
     expect(stat('active')).toBe('3');
   });
 
+  it('also lists To Do subtasks that only come from the related list', () => {
+    dashboard.getBoard.and.returnValue(
+      of({ ...BOARD, related: [card({ issueKey: 'OMS-31', status: 'To Do', parentKey: 'OMS-30', parentSummary: 'p', parentStatus: 'To Do' })] }),
+    );
+    fixture.componentInstance['loadBoard']();
+    fixture.detectChanges();
+    const keys = Array.from(el().querySelectorAll('[data-card="todo"] .ticket-key')).map((n) => n.textContent?.trim());
+    expect(keys).toContain('OMS-31');
+  });
+
   it('moves a To Do ticket to Code Process after confirmation', async () => {
     confirm.ask.and.resolveTo(true);
     dashboard.transitionTicket.and.returnValue(of({ message: 'ok' }));
@@ -386,7 +396,8 @@ describe('HomeComponent', () => {
 
     it('sits right below "Sedang dikerjakan"', () => {
       const cards = Array.from(el().querySelectorAll('section.card[data-card]')).map((s) => s.getAttribute('data-card'));
-      expect(cards.slice(0, 2)).toEqual(['active', 'review']);
+      // "Akan dikerjakan" (todo) sits above both.
+      expect(cards.slice(0, 3)).toEqual(['todo', 'active', 'review']);
     });
 
     it('always shows for a CORE board, even when empty', () => {

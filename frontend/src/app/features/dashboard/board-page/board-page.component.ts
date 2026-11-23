@@ -148,6 +148,8 @@ export class BoardPageComponent {
       if (!card.parentKey) continue;
       byParent.set(card.parentKey, [...(byParent.get(card.parentKey) ?? []), card]);
     }
+    // Under a parent, subtasks/linked items go smallest key first (CORE-11259, 11260, …).
+    for (const list of byParent.values()) list.sort((a, b) => a.issueKey.localeCompare(b.issueKey, undefined, { numeric: true }));
     return byParent;
   });
 
