@@ -110,6 +110,7 @@
                 @if (n.parentStatus) {
                   <span class="status-chip">{{ n.parentStatus }}</span>
                 }
+                <span class="ticket-break" aria-hidden="true"></span>
                 <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n, scope: 'todo' }" />
               </li>
             }
@@ -360,6 +361,7 @@
                   <span class="status-chip">{{ n.parentStatus }}</span>
                 }
                 @if (n.branches.length) {
+                  <span class="ticket-break" aria-hidden="true"></span>
                   <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n, scope: scope }" />
                 }
               </li>
