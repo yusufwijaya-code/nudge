@@ -74,6 +74,58 @@
     </section>
   }
 
+  <!-- To Do tickets: quick move into Code Process, no budget involved -->
+  @if (!boardError()) {
+    <section class="card" data-card="todo">
+      <header class="card-header">
+        <span class="card-icon accent"><app-icon name="layers" [size]="20" /></span>
+        <div>
+          <h2>Akan dikerjakan</h2>
+          <p>Tiket To Do kamu — geser ke Code Process saat mulai. Belum dihitung ke budget.</p>
+        </div>
+      </header>
+
+      @if (boardLoading()) {
+        <div class="table-skeleton" aria-busy="true">
+          @for (i of [1, 2]; track i) {
+            <div class="skeleton skeleton-row"></div>
+          }
+        </div>
+      } @else if (todo().length === 0) {
+        <div class="empty-inline">
+          <app-icon name="check-circle" [size]="18" />
+          <span>Tidak ada tiket di To Do.</span>
+        </div>
+      } @else {
+        <ul class="ticket-list">
+          @for (n of todoTree(); track n.key; let i = $index) {
+            @if (n.head) {
+              <ng-container *ngTemplateOutlet="todoRow; context: { $implicit: n.head, i: i, branch: false }" />
+            } @else {
+              <li class="ticket-parent" [style.--i]="i" [attr.data-parent]="n.key">
+                <app-icon name="layers" [size]="15" />
+                <a class="ticket-key" [href]="parentURL(n)" target="_blank" rel="noopener">{{ n.key }}</a>
+                <span class="ticket-summary">{{ n.parentSummary }}</span>
+                @if (n.parentStatus) {
+                  <span class="status-chip">{{ n.parentStatus }}</span>
+                }
+              </li>
+            }
+            @if (n.branches.length) {
+              <li class="ticket-branches">
+                <ul>
+                  @for (b of n.branches; track b.issueKey) {
+                    <ng-container *ngTemplateOutlet="todoRow; context: { $implicit: b, i: i, branch: true }" />
+                  }
+                </ul>
+              </li>
+            }
+          }
+        </ul>
+      }
+    </section>
+  }
+
   <!-- Active tickets with budget -->
   @if (!boardError()) {
     <section class="card" data-card="active">
@@ -132,60 +184,6 @@
         <ul class="ticket-list">
           @for (n of reviewTree(); track n.key; let i = $index) {
             <ng-container *ngTemplateOutlet="ticketNode; context: { $implicit: n, i: i, review: true }" />
-          }
-        </ul>
-      }
-    </section>
-  }
-
-  <!-- To Do tickets: quick move into Code Process, no budget involved -->
-  @if (!boardError()) {
-    <section class="card" data-card="todo">
-      <header class="card-header">
-        <span class="card-icon accent"><app-icon name="layers" [size]="20" /></span>
-        <div>
-          <h2>Akan dikerjakan</h2>
-          <p>Tiket To Do kamu — geser ke Code Process saat mulai. Belum dihitung ke budget.</p>
-        </div>
-      </header>
-
-      @if (boardLoading()) {
-        <div class="table-skeleton" aria-busy="true">
-          @for (i of [1, 2]; track i) {
-            <div class="skeleton skeleton-row"></div>
-          }
-        </div>
-      } @else if (todo().length === 0) {
-        <div class="empty-inline">
-          <app-icon name="check-circle" [size]="18" />
-          <span>Tidak ada tiket di To Do.</span>
-        </div>
-      } @else {
-        <ul class="ticket-list">
-          @for (t of todo(); track t.issueKey; let i = $index) {
-            <li class="ticket-row" data-level="untracked" data-todo [style.--i]="i">
-              <div class="ticket-main">
-                <div class="ticket-title">
-                  @if (!boardContext.selected() && boardOf(t); as b) {
-                    <app-board-avatar class="ticket-board" [boardId]="b.boardId" [projectKey]="b.projectKey" [size]="18" [attr.title]="b.name" />
-                  }
-                  <span class="ticket-id"><app-issue-type-icon [name]="t.issueType" [iconUrl]="t.issueTypeIconUrl" /><a class="ticket-key" [href]="t.issueURL" target="_blank" rel="noopener">{{ t.issueKey }}</a></span>
-                  <span class="ticket-summary">{{ t.summary }}</span>
-                </div>
-              </div>
-              <div class="ticket-actions">
-                <button
-                  type="button"
-                  class="btn btn-sm btn-soft"
-                  [class.loading]="movingKey() === t.issueKey"
-                  [disabled]="movingKey() !== null"
-                  (click)="move(t, 'code-process')"
-                >
-                  <span class="spinner" aria-hidden="true"></span>
-                  <span class="btn-label"><app-icon name="send" [size]="14" /> Code Process</span>
-                </button>
-              </div>
-            </li>
           }
         </ul>
       }
@@ -435,6 +433,36 @@
                   To Do
                 </button>
                 }
+              </div>
+            </li>
+</ng-template>
+
+<!-- A To Do ticket: no budget, only the move into Code Process -->
+<ng-template #todoRow let-t let-i="i" let-branch="branch">
+            <li class="ticket-row" [class.ticket-branch]="branch" data-level="untracked" data-todo [style.--i]="i">
+              <div class="ticket-main">
+                <div class="ticket-title">
+                  @if (!boardContext.selected() && boardOf(t); as b) {
+                    <app-board-avatar class="ticket-board" [boardId]="b.boardId" [projectKey]="b.projectKey" [size]="18" [attr.title]="b.name" />
+                  }
+                  @if (branch && t.relation) {
+                    <span class="relation-chip" data-relation>{{ t.relation }}</span>
+                  }
+                  <span class="ticket-id"><app-issue-type-icon [name]="t.issueType" [iconUrl]="t.issueTypeIconUrl" /><a class="ticket-key" [href]="t.issueURL" target="_blank" rel="noopener">{{ t.issueKey }}</a></span>
+                  <span class="ticket-summary">{{ t.summary }}</span>
+                </div>
+              </div>
+              <div class="ticket-actions">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-soft"
+                  [class.loading]="movingKey() === t.issueKey"
+                  [disabled]="movingKey() !== null"
+                  (click)="move(t, 'code-process')"
+                >
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span class="btn-label"><app-icon name="send" [size]="14" /> Code Process</span>
+                </button>
               </div>
             </li>
 </ng-template>

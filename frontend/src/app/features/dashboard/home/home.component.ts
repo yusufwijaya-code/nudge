@@ -243,10 +243,14 @@ export class HomeComponent {
   );
 
   /**
-   * To Do tickets: only here to be moved quickly into Code Process. They have
-   * no session, so they never feed budget, stats or the sprint report.
+   * To Do tickets (sprint cards plus their subtasks/linked items, which only
+   * live in `related`): only here to be moved quickly into Code Process. They
+   * have no session, so they never feed budget, stats or the sprint report.
    */
-  protected todo = computed<TicketCard[]>(() => this.cards().filter((c) => c.status.toLowerCase() === TODO));
+  protected todo = computed<ActiveTicket[]>(() =>
+    withBudget([...this.cards(), ...this.related()].filter((c) => c.status.toLowerCase() === TODO)),
+  );
+  protected todoTree = computed(() => toTree(this.todo()));
 
   /** The same rows as parent → branch trees. */
   protected activeTree = computed(() => toTree(this.active()));
