@@ -590,6 +590,7 @@ func (s *service) withNote(v view, msg string) view {
 // name it means, in order — CORE ends at "Code Completed", OMS at "Done".
 var geserTargets = map[string][]string{
 	"todo":           {"To Do"},
+	"code-process":   {"Code Process"},
 	"code-review":    {"Code Review"},
 	"code-completed": {"Code Completed", "Done"},
 }
@@ -597,7 +598,7 @@ var geserTargets = map[string][]string{
 func (s *service) Geser(ctx context.Context, email, issueKey, targetSlug string) GeserResult {
 	names, ok := geserTargets[strings.ToLower(targetSlug)]
 	if !ok {
-		return GeserResult{Message: fmt.Sprintf("Target %q nggak dikenali. Target yang didukung: todo, code-review, code-completed", targetSlug)}
+		return GeserResult{Message: fmt.Sprintf("Target %q nggak dikenali. Target yang didukung: todo, code-process, code-review, code-completed", targetSlug)}
 	}
 	target := names[0]
 	key, ok := normalizeKey(issueKey)

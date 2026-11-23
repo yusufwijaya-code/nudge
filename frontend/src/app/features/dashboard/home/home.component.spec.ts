@@ -288,6 +288,24 @@ describe('HomeComponent', () => {
     expect(rows.map((r) => r.getAttribute('data-level'))).toEqual(['over', 'ok', 'untracked']);
   });
 
+  it('lists To Do tickets in their own card with a Code Process move and no budget', () => {
+    const rows = Array.from(el().querySelectorAll('[data-card="todo"] .ticket-row'));
+    expect(rows.map((r) => r.querySelector('.ticket-key')?.textContent?.trim())).toEqual(['OMS-30', 'CORE-31']);
+    expect(el().querySelector('[data-card="todo"] .budget-bar')).toBeNull();
+    // To Do tickets never count as working or over budget.
+    expect(stat('active')).toBe('3');
+  });
+
+  it('moves a To Do ticket to Code Process after confirmation', async () => {
+    confirm.ask.and.resolveTo(true);
+    dashboard.transitionTicket.and.returnValue(of({ message: 'ok' }));
+
+    (el().querySelector('[data-card="todo"] .ticket-actions .btn-soft') as HTMLButtonElement).click();
+    await fixture.whenStable();
+
+    expect(dashboard.transitionTicket).toHaveBeenCalledWith('OMS-30', 'code-process');
+  });
+
   it('groups every ticket by status in workflow order', () => {
     const heads = Array.from(el().querySelectorAll('.status-name')).map((n) => n.textContent?.trim());
     expect(heads).toEqual(['To Do', 'Code Process', 'Code Review', 'CODE REVIEW']);

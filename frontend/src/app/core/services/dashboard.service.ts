@@ -70,7 +70,7 @@ export interface SprintReportResponse {
   report: SprintReport | null;
 }
 
-export type TransitionTarget = 'todo' | 'code-review' | 'code-completed';
+export type TransitionTarget = 'todo' | 'code-process' | 'code-review' | 'code-completed';
 
 /** One move the ticket's Jira workflow allows from its current status. */
 export interface TransitionOption {
