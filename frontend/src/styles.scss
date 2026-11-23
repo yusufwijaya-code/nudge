@@ -835,7 +835,7 @@ tr.clickable:hover td { background: var(--surface-2); }
 
   &.with-actions { flex-wrap: wrap; align-items: center; }
   &.with-actions > .icon-btn { margin-left: auto; }
-  &.with-actions > .fold-btn { margin-left: auto; }
+  &.with-actions > .count-pill { margin-left: auto; }
 }
 
 .card-icon {
@@ -1784,9 +1784,12 @@ table.admin-users {
 .ticket-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 
 /* Subtask / linked item branches (Tech Spec "Subtask & Linked Item Branches") */
-.fold-btn { display: inline-flex; align-items: center; gap: 8px; }
-.ticket-parent > .fold-btn { margin-left: auto; }
-.ticket-parent-fold { display: flex; justify-content: flex-end; list-style: none; margin-top: -4px; }
+.tb-branch-toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; border: 0; background: none; padding: 0; font: inherit; font-size: 0.74rem; color: var(--text-muted); cursor: pointer;
+  app-icon { transition: transform .2s; } app-icon:not(.open) { transform: rotate(-90deg); } }
+.tb-mini-bar { width: 56px; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden;
+  span { display: block; height: 100%; background: var(--success); } }
+.ticket-parent > .tb-branch-toggle { margin: 0 0 0 auto; }
+.sp-chip { flex-shrink: 0; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-muted); font-size: 0.74rem; font-weight: 700; }
 .ticket-parent {
   display: flex;
   align-items: center;
@@ -1836,27 +1839,6 @@ table.admin-users {
 .ticket-row.ticket-branch {
   position: relative;
   padding: 11px 14px;
-
-  /* ├─ / └─ connector */
-  &::before {
-    content: '';
-    position: absolute;
-    left: -20px;
-    top: -9px;
-    width: 16px;
-    height: calc(50% + 9px);
-    border-left: 2px solid var(--border-strong);
-    border-bottom: 2px solid var(--border-strong);
-    border-bottom-left-radius: 10px;
-  }
-  &:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    left: -20px;
-    top: 0;
-    bottom: -9px;
-    border-left: 2px solid var(--border-strong);
-  }
 }
 
 .relation-chip {
@@ -1878,7 +1860,6 @@ table.admin-users {
   gap: 16px;
   padding: 14px 16px;
   border: 1px solid var(--border);
-  border-left: 4px solid var(--level);
   border-radius: var(--radius);
   background: var(--surface);
   animation: fade-up 360ms var(--ease) backwards;
@@ -2010,26 +1991,6 @@ table.admin-users {
     position: relative;
     padding: 5px 8px;
     .ticket-summary { font-size: 0.8rem; color: var(--text-muted); }
-
-    &::before {
-      content: '';
-      position: absolute;
-      left: -12px;
-      top: -6px;
-      width: 10px;
-      height: calc(50% + 6px);
-      border-left: 2px solid var(--border-strong);
-      border-bottom: 2px solid var(--border-strong);
-      border-bottom-left-radius: 8px;
-    }
-    &:not(:last-child)::after {
-      content: '';
-      position: absolute;
-      left: -12px;
-      top: 0;
-      bottom: -4px;
-      border-left: 2px solid var(--border-strong);
-    }
   }
 }
 
@@ -2965,7 +2926,6 @@ app-chat-logs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
   &.active {
     background: var(--primary-soft);
-    &::before { content: ''; position: absolute; left: -8px; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; background: var(--primary); }
     strong { color: var(--primary-strong); }
   }
   &.empty { opacity: 0.72; }

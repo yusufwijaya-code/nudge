@@ -101,7 +101,7 @@
         <ul class="ticket-list">
           @for (n of todoTree(); track n.key; let i = $index) {
             @if (n.head) {
-              <ng-container *ngTemplateOutlet="todoRow; context: { $implicit: n.head, i: i, branch: false }" />
+              <ng-container *ngTemplateOutlet="todoRow; context: { $implicit: n.head, i: i, branch: false, node: n, scope: 'todo' }" />
             } @else {
               <li class="ticket-parent" [style.--i]="i" [attr.data-parent]="n.key">
                 <app-icon name="layers" [size]="15" />
@@ -110,14 +110,11 @@
                 @if (n.parentStatus) {
                   <span class="status-chip">{{ n.parentStatus }}</span>
                 }
-                <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n }" />
+                <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n, scope: 'todo' }" />
               </li>
             }
             @if (n.branches.length) {
-              @if (n.head) {
-                <li class="ticket-parent-fold"><ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n }" /></li>
-              }
-              @if (isTodoOpen(n.key)) {
+              @if (isOpen('todo', n.key)) {
                 <li class="ticket-branches" [attr.data-branches-of]="n.key">
                   <ul>
                     @for (b of n.branches; track b.issueKey) {
@@ -158,7 +155,7 @@
       } @else {
         <ul class="ticket-list">
           @for (n of activeTree(); track n.key; let i = $index) {
-            <ng-container *ngTemplateOutlet="ticketNode; context: { $implicit: n, i: i, review: false }" />
+            <ng-container *ngTemplateOutlet="ticketNode; context: { $implicit: n, i: i, review: false, scope: 'active' }" />
           }
         </ul>
       }
@@ -190,7 +187,7 @@
       } @else {
         <ul class="ticket-list">
           @for (n of reviewTree(); track n.key; let i = $index) {
-            <ng-container *ngTemplateOutlet="ticketNode; context: { $implicit: n, i: i, review: true }" />
+            <ng-container *ngTemplateOutlet="ticketNode; context: { $implicit: n, i: i, review: true, scope: 'review' }" />
           }
         </ul>
       }
@@ -351,9 +348,9 @@
 </div>
 
 <!-- A ticket (or its parent's header) with its subtask/linked branches -->
-<ng-template #ticketNode let-n let-i="i" let-review="review">
+<ng-template #ticketNode let-n let-i="i" let-review="review" let-scope="scope">
             @if (n.head) {
-              <ng-container *ngTemplateOutlet="ticketRow; context: { $implicit: n.head, i: i, review: review, branch: false }" />
+              <ng-container *ngTemplateOutlet="ticketRow; context: { $implicit: n.head, i: i, review: review, branch: false, node: n, scope: scope }" />
             } @else {
               <li class="ticket-parent" [style.--i]="i" [attr.data-parent]="n.key">
                 <app-icon name="layers" [size]="15" />
@@ -362,20 +359,25 @@
                 @if (n.parentStatus) {
                   <span class="status-chip">{{ n.parentStatus }}</span>
                 }
+                @if (n.branches.length) {
+                  <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: n, scope: scope }" />
+                }
               </li>
             }
             @if (n.branches.length) {
-              <li class="ticket-branches">
-                <ul>
-                  @for (b of n.branches; track b.issueKey) {
-                    <ng-container *ngTemplateOutlet="ticketRow; context: { $implicit: b, i: i, review: review, branch: true }" />
-                  }
-                </ul>
-              </li>
+              @if (isOpen(scope, n.key)) {
+                <li class="ticket-branches">
+                  <ul>
+                    @for (b of n.branches; track b.issueKey) {
+                      <ng-container *ngTemplateOutlet="ticketRow; context: { $implicit: b, i: i, review: review, branch: true }" />
+                    }
+                  </ul>
+                </li>
+              }
             }
 </ng-template>
 
-<ng-template #ticketRow let-t let-i="i" let-review="review" let-branch="branch">
+<ng-template #ticketRow let-t let-i="i" let-review="review" let-branch="branch" let-node="node" let-scope="scope">
             <li class="ticket-row" [class.ticket-branch]="branch" [attr.data-level]="t.hasBudgetDetail ? t.level : 'untracked'" [style.--i]="i">
               <div class="ticket-main">
                 <div class="ticket-title">
@@ -409,6 +411,9 @@
                   </div>
                 } @else {
                   <div class="ticket-meta"><span>Budget belum terhitung — tunggu poll berikutnya.</span></div>
+                }
+                @if (node && node.branches.length) {
+                  <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: node, scope: scope }" />
                 }
               </div>
               <div class="ticket-actions">
@@ -445,7 +450,7 @@
 </ng-template>
 
 <!-- A To Do ticket: no budget, only the move into Code Process -->
-<ng-template #todoRow let-t let-i="i" let-branch="branch">
+<ng-template #todoRow let-t let-i="i" let-branch="branch" let-node="node" let-scope="scope">
             <li class="ticket-row" [class.ticket-branch]="branch" data-level="untracked" data-todo [style.--i]="i">
               <div class="ticket-main">
                 <div class="ticket-title">
@@ -457,7 +462,13 @@
                   }
                   <span class="ticket-id"><app-issue-type-icon [name]="t.issueType" [iconUrl]="t.issueTypeIconUrl" /><a class="ticket-key" [href]="t.issueURL" target="_blank" rel="noopener">{{ t.issueKey }}</a></span>
                   <span class="ticket-summary">{{ t.summary }}</span>
+                  @if (t.storyPoints > 0) {
+                    <span class="sp-chip" data-sp>{{ t.storyPoints | number: '1.0-1' }} SP</span>
+                  }
                 </div>
+                @if (node && node.branches.length) {
+                  <ng-container *ngTemplateOutlet="todoFold; context: { $implicit: node, scope: scope }" />
+                }
               </div>
               <div class="ticket-actions">
                 <button
@@ -474,17 +485,17 @@
             </li>
 </ng-template>
 
-<!-- Per-parent fold of the To Do subtasks (folded by default) -->
-<ng-template #todoFold let-n>
+<!-- Per-parent fold of subtasks/linked items, same concept as Papan Tiket (folded by default) -->
+<ng-template #todoFold let-n let-scope="scope">
   <button
     type="button"
-    class="btn btn-sm btn-ghost fold-btn"
-    [attr.data-todo-toggle]="n.key"
-    [attr.aria-expanded]="isTodoOpen(n.key)"
-    [title]="isTodoOpen(n.key) ? 'Lipat subtask' : 'Buka subtask'"
-    (click)="toggleTodo(n.key)"
+    class="tb-branch-toggle"
+    [attr.data-fold-toggle]="scope + ':' + n.key"
+    [attr.aria-expanded]="isOpen(scope, n.key)"
+    (click)="toggleFold(scope, n.key)"
   >
-    <span class="count-pill"><strong>{{ n.branches.length }}</strong> subtask</span>
-    <app-icon name="chevron-down" [size]="16" [style.transform]="isTodoOpen(n.key) ? 'rotate(180deg)' : 'none'" />
+    <app-icon name="chevron-down" [size]="12" [class.open]="isOpen(scope, n.key)" />
+    <span [attr.data-fold-progress]="scope + ':' + n.key">{{ statsOf(n).total }} subtask · {{ statsOf(n).done }}/{{ statsOf(n).total }} selesai</span>
+    <span class="tb-mini-bar" aria-hidden="true"><span [style.width.%]="statsOf(n).total ? (statsOf(n).done / statsOf(n).total) * 100 : 0"></span></span>
   </button>
 </ng-template>

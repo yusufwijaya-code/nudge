@@ -48,7 +48,7 @@
   small { color: var(--text-faint); font-size: .76rem; } }
 .trf-pop { animation: pop-in 240ms var(--ease) backwards; }
 .trf-err { margin: 6px 0 0; color: var(--error); font-size: .78rem; animation: fade-in 200ms var(--ease); }
-.trf-sentence { margin: 0; padding: 14px 16px; border-left: 3px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary-soft);
+.trf-sentence { margin: 0; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--primary-soft);
   color: var(--ink); line-height: 1.6; font-size: .9rem; }
 .trf-placeholder { display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: .86rem; }
 // Shown while "Cek di Jira" runs.

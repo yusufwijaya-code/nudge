@@ -290,7 +290,7 @@ describe('HomeComponent', () => {
 
   const todoKeys = () => Array.from(el().querySelectorAll('[data-card="todo"] .ticket-key')).map((n) => n.textContent?.trim());
   const toggleTodo = (key: string) => {
-    (el().querySelector(`[data-todo-toggle="${key}"]`) as HTMLButtonElement).click();
+    (el().querySelector(`[data-fold-toggle="todo:${key}"]`) as HTMLButtonElement).click();
     fixture.detectChanges();
   };
   const withRelated = (related: ReturnType<typeof card>[]) => {
@@ -308,10 +308,18 @@ describe('HomeComponent', () => {
     expect(el().querySelector('[data-todo-count]')?.textContent?.trim()).toBe('2');
   });
 
+  it('shows the story points on To Do rows', () => {
+    dashboard.getBoard.and.returnValue(of({ columns: [{ status: 'To Do', cards: [card({ issueKey: 'OMS-70', storyPoints: 1.5 }), card({ issueKey: 'OMS-71' })] }] }));
+    fixture.componentInstance['loadBoard']();
+    fixture.detectChanges();
+    const sp = Array.from(el().querySelectorAll('[data-card="todo"] [data-sp]')).map((n) => n.textContent?.trim());
+    expect(sp).toEqual(['1.5 SP']);
+  });
+
   it('folds subtasks per parent by default, smallest key first once unfolded', () => {
     withRelated([sub(31), sub(9), sub(100)]);
     expect(todoKeys()).not.toContain('OMS-31');
-    expect(el().querySelector('[data-todo-toggle="OMS-30"] .count-pill')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('3 subtask');
+    expect(el().querySelector('[data-fold-progress="todo:OMS-30"]')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('3 subtask · 0/3 selesai');
     toggleTodo('OMS-30');
     expect(todoKeys()).toEqual(['CORE-31', 'OMS-30', 'OMS-9', 'OMS-31', 'OMS-100']);
     toggleTodo('OMS-30');
@@ -466,6 +474,10 @@ describe('HomeComponent', () => {
       ],
     };
     const activeCard = () => el().querySelector('[data-card="active"]') as HTMLElement;
+    const unfold = (scope: string, key: string) => {
+      (el().querySelector(`[data-fold-toggle="${scope}:${key}"]`) as HTMLButtonElement).click();
+      fixture.detectChanges();
+    };
 
     beforeEach(() => {
       dashboard.getBoard.and.returnValue(of(RELATED_BOARD));
@@ -473,7 +485,17 @@ describe('HomeComponent', () => {
       fixture.detectChanges();
     });
 
+    it('folds each parent branches by default and shows the progress like Papan Tiket', () => {
+      expect(activeCard().querySelector('.ticket-branch')).toBeNull();
+      expect(activeCard().querySelector('[data-fold-progress="active:OMS-11727"]')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 subtask · 0/2 selesai');
+      unfold('active', 'OMS-11727');
+      expect(activeCard().querySelectorAll('[data-parent="OMS-11727"] + .ticket-branches .ticket-branch').length).toBe(2);
+      unfold('active', 'OMS-11727');
+      expect(activeCard().querySelector('.ticket-branch')).toBeNull();
+    });
+
     it('hangs related items under a compact header when the parent is not in the card', () => {
+      unfold('active', 'OMS-11727');
       const header = activeCard().querySelector('[data-parent="OMS-11727"]') as HTMLElement;
       expect(header).not.toBeNull();
       expect(header.textContent).toContain('Upload Queue');
@@ -486,6 +508,7 @@ describe('HomeComponent', () => {
     });
 
     it('hangs branches under the full row when the parent is in the card', () => {
+      unfold('active', 'OMS-50');
       const keys = Array.from(activeCard().querySelectorAll(':scope > ul > .ticket-row:not(.ticket-branch) .ticket-key')).map((k) => k.textContent?.trim());
       expect(keys).toEqual(['OMS-50']);
       const parentRow = activeCard().querySelector(':scope > ul > .ticket-row') as HTMLElement;
