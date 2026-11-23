@@ -251,6 +251,8 @@ export class HomeComponent {
     withBudget([...this.cards(), ...this.related()].filter((c) => c.status.toLowerCase() === TODO)),
   );
   protected todoTree = computed(() => toTree(this.todo()));
+  /** Folded by default: the list can be long (every To Do subtask) and is only for quick moves. */
+  protected todoOpen = signal(false);
 
   /** The same rows as parent → branch trees. */
   protected activeTree = computed(() => toTree(this.active()));

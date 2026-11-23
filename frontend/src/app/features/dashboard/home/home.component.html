@@ -77,13 +77,25 @@
   <!-- To Do tickets: quick move into Code Process, no budget involved -->
   @if (!boardError()) {
     <section class="card" data-card="todo">
-      <header class="card-header">
+      <header class="card-header with-actions">
         <span class="card-icon accent"><app-icon name="layers" [size]="20" /></span>
         <div>
           <h2>Akan dikerjakan</h2>
           <p>Tiket To Do kamu — geser ke Code Process saat mulai. Belum dihitung ke budget.</p>
         </div>
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost fold-btn"
+          data-todo-toggle
+          [attr.aria-expanded]="todoOpen()"
+          [title]="todoOpen() ? 'Lipat daftar' : 'Buka daftar'"
+          (click)="todoOpen.set(!todoOpen())"
+        >
+          <span class="count-pill"><strong>{{ boardLoading() ? '–' : todo().length }}</strong></span>
+          <app-icon name="chevron-down" [size]="16" [style.transform]="todoOpen() ? 'rotate(180deg)' : 'none'" />
+        </button>
       </header>
+      @if (todoOpen()) {
 
       @if (boardLoading()) {
         <div class="table-skeleton" aria-busy="true">
@@ -122,6 +134,7 @@
             }
           }
         </ul>
+      }
       }
     </section>
   }
