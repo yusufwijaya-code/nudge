@@ -88,7 +88,6 @@
 .tb-branch-key { display: inline-flex; align-items: center; gap: 6px; padding-left: 10px; }
 .tb-elbow {
   width: 12px; height: 12px; flex-shrink: 0; transform: translateY(-4px);
-  border: solid var(--border-strong); border-width: 0 0 2px 2px; border-bottom-left-radius: 6px;
 }
 .tb-relation {
   padding: 0 6px; border-radius: 6px; background: var(--primary-soft);

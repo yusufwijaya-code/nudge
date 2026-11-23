@@ -9,6 +9,7 @@ import {
   TransitionTarget,
 } from '../../../core/services/dashboard.service';
 import { BoardContextService, BoardSummary } from '../../../core/services/board-context.service';
+import { statusTone } from '../board-page/board-format';
 import { BoardAvatarComponent } from '../../../shared/ui/board-avatar.component';
 import { IssueTypeIconComponent } from '../../../shared/ui/issue-type-icon.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -151,6 +152,13 @@ export function toTree(rows: ActiveTicket[]): TicketNode[] {
   return [...nodes.values()];
 }
 
+/** Subtasks under each parent go smallest key first; `nodes` too when asked (the budget order of the working cards stays). */
+export function sortNodes(nodes: TicketNode[], sortParents = false): TicketNode[] {
+  const byKey = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+  for (const n of nodes) n.branches.sort((a, b) => byKey(a.issueKey, b.issueKey));
+  return sortParents ? nodes.sort((a, b) => byKey(a.key, b.key)) : nodes;
+}
+
 /** "yusuf.wijaya@esb.co.id" → "Yusuf". */
 export function firstName(email: string | undefined | null): string {
   const local = (email ?? '').split('@')[0].split(/[._-]/)[0];
@@ -251,24 +259,37 @@ export class HomeComponent {
     withBudget([...this.cards(), ...this.related()].filter((c) => c.status.toLowerCase() === TODO)),
   );
   /** Parent → subtask nodes, smallest key first (parents and the subtasks under each). */
-  protected todoTree = computed(() => {
-    const byKey = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
-    const nodes = toTree(this.todo());
-    for (const n of nodes) n.branches.sort((a, b) => byKey(a.issueKey, b.issueKey));
-    return nodes.sort((a, b) => byKey(a.key, b.key));
+  protected todoTree = computed(() => sortNodes(toTree(this.todo()), true));  /** Every parent's whole picture (all statuses, sprint cards + related): total and done subtasks. */
+  protected branchStats = computed(() => {
+    const m = new Map<string, { total: number; done: number }>();
+    for (const c of [...this.cards(), ...this.related()]) {
+      if (!c.parentKey) continue;
+      const e = m.get(c.parentKey) ?? { total: 0, done: 0 };
+      e.total++;
+      if (statusTone(c.status) === 'done') e.done++;
+      m.set(c.parentKey, e);
+    }
+    return m;
   });
-  /** Parents whose To Do subtasks are unfolded (default folded: the list can be long). */
-  protected todoOpenKeys = signal<Record<string, boolean>>({});
-  protected isTodoOpen(key: string): boolean {
-    return !!this.todoOpenKeys()[key];
+
+  /** "N subtask · d/N selesai" numbers for a parent node (falls back to the shown branches). */
+  protected statsOf(n: TicketNode): { total: number; done: number } {
+    return this.branchStats().get(n.key) ?? { total: n.branches.length, done: 0 };
   }
-  protected toggleTodo(key: string): void {
-    this.todoOpenKeys.set({ ...this.todoOpenKeys(), [key]: !this.isTodoOpen(key) });
+
+  /** Folded by default: parents whose subtasks are unfolded, keyed "<card>:<parent>". */
+  protected foldOpenKeys = signal<Record<string, boolean>>({});
+  protected isOpen(scope: string, key: string): boolean {
+    return !!this.foldOpenKeys()[`${scope}:${key}`];
+  }
+  protected toggleFold(scope: string, key: string): void {
+    const k = `${scope}:${key}`;
+    this.foldOpenKeys.set({ ...this.foldOpenKeys(), [k]: !this.foldOpenKeys()[k] });
   }
 
   /** The same rows as parent → branch trees. */
-  protected activeTree = computed(() => toTree(this.active()));
-  protected reviewTree = computed(() => toTree(this.reviewing()));
+  protected activeTree = computed(() => sortNodes(toTree(this.active())));
+  protected reviewTree = computed(() => sortNodes(toTree(this.reviewing())));
 
   /** The review card shows for a CORE board, or in "Semua board" when there's something in review. */
   protected showReview = computed(() => {
