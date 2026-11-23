@@ -288,7 +288,11 @@ describe('HomeComponent', () => {
     expect(rows.map((r) => r.getAttribute('data-level'))).toEqual(['over', 'ok', 'untracked']);
   });
 
-  const todoKeys = () => Array.from(el().querySelectorAll('[data-card="todo"] .ticket-key')).map((n) => n.textContent?.trim());
+  // Keys currently visible: rows inside a folded (closed) group are still in the DOM for the animation.
+  const todoKeys = () =>
+    Array.from(el().querySelectorAll('[data-card="todo"] .ticket-key'))
+      .filter((n) => !n.closest('.ticket-branches.closed'))
+      .map((n) => n.textContent?.trim());
   const toggleTodo = (key: string) => {
     (el().querySelector(`[data-fold-toggle="todo:${key}"]`) as HTMLButtonElement).click();
     fixture.detectChanges();
@@ -486,12 +490,15 @@ describe('HomeComponent', () => {
     });
 
     it('folds each parent branches by default and shows the progress like Papan Tiket', () => {
-      expect(activeCard().querySelector('.ticket-branch')).toBeNull();
+      expect(activeCard().querySelector('.ticket-branches:not(.closed)')).toBeNull();
       expect(activeCard().querySelector('[data-fold-progress="active:OMS-11727"]')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 subtask · 0/2 selesai');
       unfold('active', 'OMS-11727');
-      expect(activeCard().querySelectorAll('[data-parent="OMS-11727"] + .ticket-branches .ticket-branch').length).toBe(2);
+      expect(activeCard().querySelectorAll('[data-parent="OMS-11727"] + .ticket-branches:not(.closed) .ticket-branch').length).toBe(2);
       unfold('active', 'OMS-11727');
-      expect(activeCard().querySelector('.ticket-branch')).toBeNull();
+      // Folded, not removed, so the close can animate; inert keeps it out of tab order.
+      const folded = activeCard().querySelector('[data-parent="OMS-11727"] + .ticket-branches') as HTMLElement;
+      expect(folded.classList).toContain('closed');
+      expect(folded.hasAttribute('inert')).toBeTrue();
     });
 
     it('hangs related items under a compact header when the parent is not in the card', () => {
