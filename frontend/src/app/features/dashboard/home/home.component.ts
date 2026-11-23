@@ -250,9 +250,21 @@ export class HomeComponent {
   protected todo = computed<ActiveTicket[]>(() =>
     withBudget([...this.cards(), ...this.related()].filter((c) => c.status.toLowerCase() === TODO)),
   );
-  protected todoTree = computed(() => toTree(this.todo()));
-  /** Folded by default: the list can be long (every To Do subtask) and is only for quick moves. */
-  protected todoOpen = signal(false);
+  /** Parent → subtask nodes, smallest key first (parents and the subtasks under each). */
+  protected todoTree = computed(() => {
+    const byKey = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+    const nodes = toTree(this.todo());
+    for (const n of nodes) n.branches.sort((a, b) => byKey(a.issueKey, b.issueKey));
+    return nodes.sort((a, b) => byKey(a.key, b.key));
+  });
+  /** Parents whose To Do subtasks are unfolded (default folded: the list can be long). */
+  protected todoOpenKeys = signal<Record<string, boolean>>({});
+  protected isTodoOpen(key: string): boolean {
+    return !!this.todoOpenKeys()[key];
+  }
+  protected toggleTodo(key: string): void {
+    this.todoOpenKeys.set({ ...this.todoOpenKeys(), [key]: !this.isTodoOpen(key) });
+  }
 
   /** The same rows as parent → branch trees. */
   protected activeTree = computed(() => toTree(this.active()));
