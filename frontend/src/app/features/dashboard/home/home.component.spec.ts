@@ -489,20 +489,20 @@ describe('HomeComponent', () => {
       fixture.detectChanges();
     });
 
-    it('folds each parent branches by default and shows the progress like Papan Tiket', () => {
-      expect(activeCard().querySelector('.ticket-branches:not(.closed)')).toBeNull();
+    it('unfolds working/review parents by default, shows the progress, and folds on toggle', () => {
+      const group = () => activeCard().querySelector('[data-parent="OMS-11727"] + .ticket-branches') as HTMLElement;
+      expect(group().classList).not.toContain('closed');
       expect(activeCard().querySelector('[data-fold-progress="active:OMS-11727"]')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 subtask · 0/2 selesai');
-      unfold('active', 'OMS-11727');
-      expect(activeCard().querySelectorAll('[data-parent="OMS-11727"] + .ticket-branches:not(.closed) .ticket-branch').length).toBe(2);
+      expect(group().querySelectorAll('.ticket-branch').length).toBe(2);
       unfold('active', 'OMS-11727');
       // Folded, not removed, so the close can animate; inert keeps it out of tab order.
-      const folded = activeCard().querySelector('[data-parent="OMS-11727"] + .ticket-branches') as HTMLElement;
-      expect(folded.classList).toContain('closed');
-      expect(folded.hasAttribute('inert')).toBeTrue();
+      expect(group().classList).toContain('closed');
+      expect(group().hasAttribute('inert')).toBeTrue();
+      unfold('active', 'OMS-11727');
+      expect(group().classList).not.toContain('closed');
     });
 
     it('hangs related items under a compact header when the parent is not in the card', () => {
-      unfold('active', 'OMS-11727');
       const header = activeCard().querySelector('[data-parent="OMS-11727"]') as HTMLElement;
       expect(header).not.toBeNull();
       expect(header.textContent).toContain('Upload Queue');
@@ -515,7 +515,6 @@ describe('HomeComponent', () => {
     });
 
     it('hangs branches under the full row when the parent is in the card', () => {
-      unfold('active', 'OMS-50');
       const keys = Array.from(activeCard().querySelectorAll(':scope > ul > .ticket-row:not(.ticket-branch) .ticket-key')).map((k) => k.textContent?.trim());
       expect(keys).toEqual(['OMS-50']);
       const parentRow = activeCard().querySelector(':scope > ul > .ticket-row') as HTMLElement;

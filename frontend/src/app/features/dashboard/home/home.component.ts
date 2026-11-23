@@ -277,14 +277,16 @@ export class HomeComponent {
     return this.branchStats().get(n.key) ?? { total: n.branches.length, done: 0 };
   }
 
-  /** Folded by default: parents whose subtasks are unfolded, keyed "<card>:<parent>". */
+  /**
+   * Fold state per "<card>:<parent>". Until the user toggles one, the working
+   * and review cards are unfolded and "Akan dikerjakan" (a long To Do list) is folded.
+   */
   protected foldOpenKeys = signal<Record<string, boolean>>({});
   protected isOpen(scope: string, key: string): boolean {
-    return !!this.foldOpenKeys()[`${scope}:${key}`];
+    return this.foldOpenKeys()[`${scope}:${key}`] ?? scope !== 'todo';
   }
   protected toggleFold(scope: string, key: string): void {
-    const k = `${scope}:${key}`;
-    this.foldOpenKeys.set({ ...this.foldOpenKeys(), [k]: !this.foldOpenKeys()[k] });
+    this.foldOpenKeys.set({ ...this.foldOpenKeys(), [`${scope}:${key}`]: !this.isOpen(scope, key) });
   }
 
   /** The same rows as parent → branch trees. */
