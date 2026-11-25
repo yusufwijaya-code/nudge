@@ -147,3 +147,23 @@ func TestCalculateElapsedSeconds_WithActiveSession(t *testing.T) {
 func (f *fakeIssueSessionRepository) UpdateActiveSprint(ctx context.Context, issueKey string, boardID, sprintID *int64) error {
 	return nil
 }
+
+// The live clock of a session uses its project's excluded slots too. A
+// schedule that excludes every working hour of every weekday leaves nothing to
+// count, whatever day and hour the test runs.
+func TestCalculateElapsedSeconds_LiveTimeUsesTheSessionsProjectSchedule(t *testing.T) {
+	var windows []business_hours_dto.ExcludedWindow
+	for day := time.Monday; day <= time.Friday; day++ {
+		windows = append(windows, business_hours_dto.ExcludedWindow{Name: "all day", Weekday: day, StartMinute: 0, Minutes: 24 * 60})
+	}
+	business_hours_dto.SetSchedules(map[string]business_hours_dto.Schedule{"OMS": {Windows: windows}})
+	t.Cleanup(func() { business_hours_dto.SetSchedules(nil) })
+
+	started := time.Now().Add(-72 * time.Hour)
+	session := issue_session_dto.IssueSession{ProjectKey: "OMS", AccumulatedSeconds: 600, CurrentSessionStartedDate: &started}
+	bh := business_hours_service.NewBusinessHoursService()
+
+	if got := CalculateElapsedSeconds(session, bh, business_hours_dto.HolidayCalendar{}); got != 600 {
+		t.Errorf("elapsed = %d, want only the stored 600 (every working hour is excluded)", got)
+	}
+}

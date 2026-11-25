@@ -368,7 +368,7 @@ func (s *userDashboardServiceImpl) buildCard(ctx context.Context, issue jira_cli
 }
 
 func (s *userDashboardServiceImpl) attachBudgetDetail(ctx context.Context, card *user_dashboard_dto.Card, session issue_session_dto.IssueSession) {
-	cal := s.holidayCalendar.ForEmail(ctx, session.AssigneeEmail)
+	cal := s.holidayCalendar.ForEmail(ctx, session.AssigneeEmail).ForProject(session.ProjectKey)
 	budgetSeconds := int64(session.StoryPoints * 3600)
 	elapsedSeconds := issue_session_service.CalculateElapsedSeconds(session, s.businessHours, cal)
 	remainingSeconds := budgetSeconds - elapsedSeconds

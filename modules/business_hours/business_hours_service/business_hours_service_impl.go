@@ -55,27 +55,50 @@ func (s *businessHoursServiceImpl) ElapsedBusinessSeconds(start, end time.Time, 
 }
 
 func businessSecondsInDay(dayStart, dayEnd time.Time, cal business_hours_dto.HolidayCalendar) int64 {
-	weekday := dayStart.Weekday()
-	if weekday == time.Saturday || weekday == time.Sunday {
-		return 0
-	}
-	if cal.IsHoliday(dayStart) {
-		return 0
-	}
-
-	y, m, d := dayStart.Date()
-	loc := dayStart.Location()
-
-	morningStart := time.Date(y, m, d, workStartHour, workStartMinute, 0, 0, loc)
-	morningEnd := time.Date(y, m, d, lunchStartHour, 0, 0, 0, loc)
-	afternoonStart := time.Date(y, m, d, lunchEndHour, 0, 0, 0, loc)
-	afternoonEnd := time.Date(y, m, d, workEndHour, workEndMinute, 0, 0, loc)
-
 	var seconds int64
-	seconds += overlapSeconds(dayStart, dayEnd, morningStart, morningEnd)
-	seconds += overlapSeconds(dayStart, dayEnd, afternoonStart, afternoonEnd)
-
+	for _, iv := range workIntervals(dayStart, cal) {
+		seconds += overlapSeconds(dayStart, dayEnd, iv[0], iv[1])
+	}
 	return seconds
+}
+
+// workIntervals are the counted stretches of day's date: the morning and the
+// afternoon segment, minus the project's excluded windows (Daily Stand Up,
+// Sprint Planning...). None on weekends and holidays.
+func workIntervals(day time.Time, cal business_hours_dto.HolidayCalendar) [][2]time.Time {
+	weekday := day.Weekday()
+	if weekday == time.Saturday || weekday == time.Sunday || cal.IsHoliday(day) {
+		return nil
+	}
+	y, m, d := day.Date()
+	loc := day.Location()
+	intervals := [][2]time.Time{
+		{time.Date(y, m, d, workStartHour, workStartMinute, 0, 0, loc), time.Date(y, m, d, lunchStartHour, 0, 0, 0, loc)},
+		{time.Date(y, m, d, lunchEndHour, 0, 0, 0, loc), time.Date(y, m, d, workEndHour, workEndMinute, 0, 0, loc)},
+	}
+	for _, cut := range cal.ExcludedOn(day) {
+		intervals = subtractInterval(intervals, cut)
+	}
+	return intervals
+}
+
+// subtractInterval removes cut from every interval, keeping what is left on
+// either side. Overlapping cuts are fine: each is applied in turn.
+func subtractInterval(intervals [][2]time.Time, cut [2]time.Time) [][2]time.Time {
+	var out [][2]time.Time
+	for _, iv := range intervals {
+		if !cut[1].After(iv[0]) || !cut[0].Before(iv[1]) {
+			out = append(out, iv)
+			continue
+		}
+		if cut[0].After(iv[0]) {
+			out = append(out, [2]time.Time{iv[0], cut[0]})
+		}
+		if cut[1].Before(iv[1]) {
+			out = append(out, [2]time.Time{cut[1], iv[1]})
+		}
+	}
+	return out
 }
 
 // DeadlineAfterBusinessSeconds walks forward day by day from `from`,
@@ -110,20 +133,7 @@ func (s *businessHoursServiceImpl) DeadlineAfterBusinessSeconds(from time.Time, 
 // is true and deadline is the exact instant reached; otherwise it returns
 // how many seconds this day contributed so the caller can keep walking.
 func deadlineWithinDay(dayStart, dayEnd time.Time, remaining int64, cal business_hours_dto.HolidayCalendar) (consumed int64, found bool, deadline time.Time) {
-	weekday := dayStart.Weekday()
-	if weekday == time.Saturday || weekday == time.Sunday || cal.IsHoliday(dayStart) {
-		return 0, false, time.Time{}
-	}
-
-	y, m, d := dayStart.Date()
-	loc := dayStart.Location()
-
-	segments := [2][2]time.Time{
-		{time.Date(y, m, d, workStartHour, workStartMinute, 0, 0, loc), time.Date(y, m, d, lunchStartHour, 0, 0, 0, loc)},
-		{time.Date(y, m, d, lunchEndHour, 0, 0, 0, loc), time.Date(y, m, d, workEndHour, workEndMinute, 0, 0, loc)},
-	}
-
-	for _, seg := range segments {
+	for _, seg := range workIntervals(dayStart, cal) {
 		segStart, segEnd := seg[0], seg[1]
 		if dayStart.After(segStart) {
 			segStart = dayStart
@@ -152,25 +162,12 @@ func deadlineWithinDay(dayStart, dayEnd time.Time, remaining int64, cal business
 // weekends, and holidays are all excluded, same as the elapsed-time calc).
 func (s *businessHoursServiceImpl) IsWithinBusinessHours(t time.Time, cal business_hours_dto.HolidayCalendar) bool {
 	t = t.In(jakartaLocation)
-
-	weekday := t.Weekday()
-	if weekday == time.Saturday || weekday == time.Sunday {
-		return false
+	for _, iv := range workIntervals(t, cal) {
+		if !t.Before(iv[0]) && t.Before(iv[1]) {
+			return true
+		}
 	}
-	if cal.IsHoliday(t) {
-		return false
-	}
-
-	y, m, d := t.Date()
-	loc := t.Location()
-	morningStart := time.Date(y, m, d, workStartHour, workStartMinute, 0, 0, loc)
-	morningEnd := time.Date(y, m, d, lunchStartHour, 0, 0, 0, loc)
-	afternoonStart := time.Date(y, m, d, lunchEndHour, 0, 0, 0, loc)
-	afternoonEnd := time.Date(y, m, d, workEndHour, workEndMinute, 0, 0, loc)
-
-	inMorning := !t.Before(morningStart) && t.Before(morningEnd)
-	inAfternoon := !t.Before(afternoonStart) && t.Before(afternoonEnd)
-	return inMorning || inAfternoon
+	return false
 }
 
 // overlapSeconds returns the length, in seconds, of the intersection of

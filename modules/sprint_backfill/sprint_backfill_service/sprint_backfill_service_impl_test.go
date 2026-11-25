@@ -12,6 +12,7 @@ import (
 	"nudge/modules/business_hours/business_hours_dto"
 	"nudge/modules/business_hours/business_hours_service"
 	"nudge/modules/issue_session/issue_session_dto"
+	"nudge/modules/issue_session/issue_session_repository"
 	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/registration/registration_dto"
@@ -79,9 +80,10 @@ func (f *fakeUsers) FindAll(ctx context.Context) ([]registration_dto.User, error
 }
 
 type fakeSessions struct {
-	existing map[string]bool
-	inserted map[string]issue_session_dto.IssueSession
-	updated  map[string]int64
+	byProject map[string][]issue_session_repository.ProjectSession
+	existing  map[string]bool
+	inserted  map[string]issue_session_dto.IssueSession
+	updated   map[string]int64
 }
 
 func (f *fakeSessions) UpdateAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
@@ -90,6 +92,10 @@ func (f *fakeSessions) UpdateAccumulatedSeconds(ctx context.Context, issueKey st
 	}
 	f.updated[issueKey] = seconds
 	return nil
+}
+
+func (f *fakeSessions) ListSessionsByProject(ctx context.Context, projectKey string) ([]issue_session_repository.ProjectSession, error) {
+	return f.byProject[projectKey], nil
 }
 
 func (f *fakeSessions) SessionExists(ctx context.Context, issueKey string) (bool, error) {
@@ -297,5 +303,115 @@ func TestRunAll_DoesNothingWithoutAJiraAccount(t *testing.T) {
 	sessions := &fakeSessions{}
 	if added := newService(jira, &fakeUsers{users: []registration_dto.User{yusuf}}, sessions).RunAll(context.Background()); added != 0 {
 		t.Errorf("RunAll = %d, want 0 without a Jira account", added)
+	}
+}
+
+// Worked by hand (Daily Stand Up Tuesday 08:45 for 30 min; Sprint Planning
+// Monday 11:00 for 390 min, week 2 of a sprint that started Wednesday 4 Nov):
+// a CORE ticket in Code Process from Mon 9 Nov 08:30 to Tue 10 Nov 12:00.
+//
+//	Monday   08:30-11:00                 = 2.5h  (11:00 on is the ritual)
+//	Tuesday  08:30-12:00 minus the DSU   = 3.0h
+//	total                                = 5.5h = 19800 s   (11.5h = 41400 s without the schedule)
+func TestRunForEmail_TheProjectsExcludedSlotsAreLeftOutOfTheRebuiltTime(t *testing.T) {
+	wib := time.FixedZone("WIB", 7*3600)
+	run := func(withSchedule bool) int64 {
+		business_hours_dto.SetSchedules(nil)
+		if withSchedule {
+			business_hours_dto.SetSchedules(map[string]business_hours_dto.Schedule{"CORE": {
+				Windows: []business_hours_dto.ExcludedWindow{
+					{Name: "DSU", Weekday: time.Tuesday, StartMinute: 8*60 + 45, Minutes: 30},
+					{Name: "Sprint Planning / Grooming", Weekday: time.Monday, StartMinute: 11 * 60, Minutes: 390, SprintWeek: 2},
+				},
+				SprintStart: time.Date(2026, 11, 4, 9, 0, 0, 0, wib),
+			}})
+		}
+		jira := &fakeJira{
+			sprint: []jira_client_dto.Issue{ticket("CORE-1", "Code Completed", activeSprint, sp(16), "acc-1")},
+			changelogs: map[string][]jira_client_dto.ChangelogEntry{"CORE-1": {
+				{Created: "2026-11-09T08:30:00.000+0700", Items: []jira_client_dto.ChangelogEntryItem{{Field: "status", FromString: "To Do", ToString: "Code Process"}}},
+				{Created: "2026-11-10T12:00:00.000+0700", Items: []jira_client_dto.ChangelogEntryItem{{Field: "status", FromString: "Code Process", ToString: "Code Completed"}}},
+			}},
+		}
+		sessions := &fakeSessions{}
+		if _, _, err := newService(jira, &fakeUsers{users: []registration_dto.User{yusuf}}, sessions).RunForEmail(context.Background(), yusuf.Email); err != nil {
+			t.Fatalf("RunForEmail: %v", err)
+		}
+		return sessions.inserted["CORE-1"].AccumulatedSeconds
+	}
+	t.Cleanup(func() { business_hours_dto.SetSchedules(nil) })
+
+	if got := run(false); got != 41400 {
+		t.Errorf("without a schedule = %d s, want 41400 (11.5h)", got)
+	}
+	if got := run(true); got != 19800 {
+		t.Errorf("with the schedule = %d s, want 19800 (5.5h)", got)
+	}
+}
+
+// Every sprint is recalculated, each with its own sprint start for the "week N"
+// ritual. The same ticket worked Mon 9 Nov 08:30 - 17:30:
+//
+//	in a sprint that started Wed 4 Nov, 9 Nov is week 2: the ritual (11:00 on) is left out -> 2.5h
+//	in a sprint that started Mon 9 Nov, 9 Nov is week 1: counts in full                      -> 8h
+//	with no sprint known: the week-N ritual is never guessed                                  -> 8h
+func TestRecalculateProject_EverySprintUsesItsOwnSprintStart(t *testing.T) {
+	wib := time.FixedZone("WIB", 7*3600)
+	business_hours_dto.SetSchedules(map[string]business_hours_dto.Schedule{"CORE": {
+		Windows: []business_hours_dto.ExcludedWindow{{Name: "Sprint Planning / Grooming", Weekday: time.Monday, StartMinute: 11 * 60, Minutes: 390, SprintWeek: 2}},
+		// the ACTIVE sprint's start: it must not leak into the older sprints below
+		SprintStart: time.Date(2026, 11, 9, 9, 0, 0, 0, wib),
+	}})
+	t.Cleanup(func() { business_hours_dto.SetSchedules(nil) })
+
+	day := []jira_client_dto.ChangelogEntry{
+		{Created: "2026-11-09T08:30:00.000+0700", Items: []jira_client_dto.ChangelogEntryItem{{Field: "status", FromString: "To Do", ToString: "Code Process"}}},
+		{Created: "2026-11-09T17:30:00.000+0700", Items: []jira_client_dto.ChangelogEntryItem{{Field: "status", FromString: "Code Process", ToString: "Code Completed"}}},
+	}
+	jira := &fakeJira{changelogs: map[string][]jira_client_dto.ChangelogEntry{"CORE-1": day, "CORE-2": day, "CORE-3": day}}
+	id := func(n int64) *int64 { return &n }
+	sessions := &fakeSessions{byProject: map[string][]issue_session_repository.ProjectSession{"CORE": {
+		{IssueKey: "CORE-1", AssigneeEmail: "yusuf@esb.co.id", SprintID: id(100)}, // started Wed 4 Nov
+		{IssueKey: "CORE-2", AssigneeEmail: "yusuf@esb.co.id", SprintID: id(200)}, // started Mon 9 Nov
+		{IssueKey: "CORE-3", AssigneeEmail: "yusuf@esb.co.id"},                    // no sprint recorded
+	}}}
+	starts := map[int64]time.Time{100: time.Date(2026, 11, 4, 9, 0, 0, 0, wib), 200: time.Date(2026, 11, 9, 9, 0, 0, 0, wib)}
+	var asked []int64
+	svc := NewSprintBackfillService(jira, &fakeUsers{users: []registration_dto.User{yusuf}}, nil, sessions,
+		business_hours_service.NewBusinessHoursService(), business_hours_dto.HolidayCalendar{},
+		WithSprintStart(func(_ context.Context, sprintID int64) (time.Time, bool) {
+			asked = append(asked, sprintID)
+			return starts[sprintID], true
+		}))
+
+	if n := svc.RecalculateProject(context.Background(), "CORE"); n != 3 {
+		t.Fatalf("RecalculateProject = %d, want 3 sessions rewritten", n)
+	}
+	want := map[string]int64{"CORE-1": 9000, "CORE-2": 28800, "CORE-3": 28800}
+	for key, seconds := range want {
+		if sessions.updated[key] != seconds {
+			t.Errorf("%s = %d s, want %d", key, sessions.updated[key], seconds)
+		}
+	}
+	if len(asked) != 2 {
+		t.Errorf("sprint starts asked %v, want one lookup per distinct sprint", asked)
+	}
+}
+
+func TestRecalculateProject_LeavesAnUnreadableSessionAloneAndKeepsGoing(t *testing.T) {
+	jira := &fakeJira{changelogs: map[string][]jira_client_dto.ChangelogEntry{"CORE-2": cpThenReview()}}
+	sessions := &fakeSessions{byProject: map[string][]issue_session_repository.ProjectSession{"CORE": {
+		{IssueKey: "CORE-1", AssigneeEmail: "yusuf@esb.co.id"}, // no changelog at all: never entered a tracked status
+		{IssueKey: "CORE-2", AssigneeEmail: "yusuf@esb.co.id"},
+	}}}
+	svc := newService(jira, &fakeUsers{users: []registration_dto.User{yusuf}}, sessions)
+	if n := svc.RecalculateProject(context.Background(), "CORE"); n != 1 {
+		t.Errorf("RecalculateProject = %d, want only the session with a tracked run", n)
+	}
+	if _, touched := sessions.updated["CORE-1"]; touched {
+		t.Error("a session with no tracked run must not be rewritten")
+	}
+	if sessions.updated["CORE-2"] != 36000 {
+		t.Errorf("CORE-2 = %d, want 36000", sessions.updated["CORE-2"])
 	}
 }

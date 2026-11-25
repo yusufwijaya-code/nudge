@@ -7,6 +7,10 @@ import (
 
 type HolidayCalendar struct {
 	Holidays map[string]bool
+	// Windows / SprintStart: the project's excluded slots (DSU, Sprint Planning...),
+	// attached by ForProject; empty = nothing excluded.
+	Windows     []ExcludedWindow
+	SprintStart time.Time
 }
 
 // CalendarSource yields the non-working days that apply to one user: the
@@ -28,7 +32,7 @@ func (c HolidayCalendar) With(dates []string) HolidayCalendar {
 	for _, d := range dates {
 		merged[d] = true
 	}
-	return HolidayCalendar{Holidays: merged}
+	return HolidayCalendar{Holidays: merged, Windows: c.Windows, SprintStart: c.SprintStart}
 }
 
 func (c HolidayCalendar) IsHoliday(t time.Time) bool {

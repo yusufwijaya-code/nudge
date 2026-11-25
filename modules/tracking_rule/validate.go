@@ -160,5 +160,10 @@ func buildRule(in RuleInput, l Lookup) (Rule, map[string]string) {
 	} else {
 		rule.CreateFields = fields
 	}
+	if excluded, msg := normalizeExcluded(in.Excluded); msg != "" {
+		errs["excluded"] = msg
+	} else {
+		rule.Excluded = excluded
+	}
 	return rule, errs
 }

@@ -9,13 +9,13 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"nudge/base/helpers/shutdown"
 	"nudge/config"
 	"nudge/migrations"
-	"nudge/modules/chat_group"
 	"nudge/modules/admin_dashboard/admin_dashboard_handler"
 	"nudge/modules/admin_dashboard/admin_dashboard_service"
 	"nudge/modules/auth/auth_dto"
@@ -24,6 +24,7 @@ import (
 	"nudge/modules/auth/auth_session_repository"
 	"nudge/modules/board/board_repository"
 	"nudge/modules/board/board_service"
+	"nudge/modules/board_scope"
 	"nudge/modules/business_hours/business_hours_service"
 	"nudge/modules/chat_app/chat_app_auth"
 	"nudge/modules/chat_app/chat_app_card"
@@ -36,9 +37,9 @@ import (
 	"nudge/modules/chat_command_poller/chat_command_poller_service"
 	"nudge/modules/chat_delivery"
 	"nudge/modules/chat_dm_notifier/chat_dm_notifier_service"
+	"nudge/modules/chat_group"
 	"nudge/modules/chat_interactive/chat_interactive_service"
 	"nudge/modules/chat_log"
-	"nudge/modules/board_scope"
 	"nudge/modules/chat_log/chat_log_handler"
 	"nudge/modules/chat_log/chat_log_repository"
 	"nudge/modules/chat_oauth/chat_oauth_service"
@@ -47,6 +48,7 @@ import (
 	"nudge/modules/issue_create/issue_create_service"
 	"nudge/modules/issue_session/issue_session_repository"
 	"nudge/modules/issue_session/issue_session_service"
+	"nudge/modules/jira_account"
 	"nudge/modules/jira_client/jira_client_service"
 	"nudge/modules/jira_credential/jira_credential_repository"
 	"nudge/modules/jira_credential/jira_credential_service"
@@ -63,7 +65,6 @@ import (
 	"nudge/modules/sprint_report/sprint_report_service"
 	"nudge/modules/status_watch/status_watch_repository"
 	"nudge/modules/status_watch/status_watch_service"
-	"nudge/modules/jira_account"
 	"nudge/modules/tracking_rule"
 	"nudge/modules/user_avatar/user_avatar_handler"
 	"nudge/modules/user_avatar/user_avatar_repository"
@@ -212,7 +213,7 @@ func main() {
 	boardScopeRepo := board_scope.New(db)
 	chatInteractiveSvc := chat_interactive_service.New(chat_interactive_service.Deps{
 		Users: registrationRepo, Dashboard: userDashboardSvc, Leaves: userLeaveSvc, Settings: userSettingSvc,
-		Scope: boardScopeRepo,
+		Scope:  boardScopeRepo,
 		WebURL: cfg.FrontendURL + cfg.BasePath,
 	})
 
@@ -253,7 +254,7 @@ func main() {
 	}
 	operatorName := resolveOperatorName(context.Background(), registrationRepo, cfg.OperatorEmail)
 	deliveryDeps := chat_delivery.Deps{Store: chatAppRepo, OperatorEmail: cfg.OperatorEmail, OperatorName: operatorName, Log: chatLogRepo}
-	deliveryDeps.Cards = chat_app_card.Build // phase 3: cards with action buttons on the app path
+	deliveryDeps.Cards = chat_app_card.Build        // phase 3: cards with action buttons on the app path
 	deliveryDeps.TextCards = chat_app_card.TextCard // the "/n-help" hint of a notice becomes a menu button
 	if chatAppClient != nil {
 		deliveryDeps.App = chatAppClient
@@ -277,9 +278,33 @@ func main() {
 	// Tech Spec "Active Sprint Tracking & Changelog Backfill": rebuild the
 	// time of active-sprint tickets the poller never saw — at start and
 	// every day at 07:00 WIB, plus the Sprint card's button.
+	// A sprint's start date (cached) is what "week N of the sprint" excluded
+	// slots count from when every sprint of a board is recalculated.
+	sprintClient := jira_client_service.NewSprintClient(&cfg)
+	var sprintStartsMu sync.Mutex
+	sprintStarts := map[int64]time.Time{}
+	sprintStartByID := func(ctx context.Context, sprintID int64) (time.Time, bool) {
+		sprintStartsMu.Lock()
+		cached, seen := sprintStarts[sprintID]
+		sprintStartsMu.Unlock()
+		if seen {
+			return cached, !cached.IsZero()
+		}
+		sprint, err := sprintClient.GetSprint(ctx, sprintID)
+		if err != nil {
+			log.Printf("main: sprint %d start unavailable: %v", sprintID, err)
+			return time.Time{}, false
+		}
+		start, _ := sprint.StartTime()
+		sprintStartsMu.Lock()
+		sprintStarts[sprintID] = start
+		sprintStartsMu.Unlock()
+		return start, !start.IsZero()
+	}
 	sprintBackfillSvc := sprint_backfill_service.NewSprintBackfillService(
 		jiraAgileClient, registrationRepo, jiraCredentialSvc,
 		issue_session_repository.NewSessionBackfillRepository(db), businessHoursSvc, userLeaveSvc,
+		sprint_backfill_service.WithSprintStart(sprintStartByID),
 	)
 	recalcLeave = func(email string) {
 		n, err := sprintBackfillSvc.RecalculateForEmail(context.Background(), email)
@@ -295,10 +320,33 @@ func main() {
 	// refreshed on every admin save and every 5 minutes.
 	shutdownMgr := shutdown.NewManager()
 	trackingRuleSvc := tracking_rule.NewService(tracking_rule.Deps{
-		Store:    tracking_rule.NewRepository(db),
-		Jira:     jira_client_service.NewProjectMetaClient(&cfg),
-		Boards:   boardSvc,
-		Recalc:   sprintBackfillSvc,
+		Store:  tracking_rule.NewRepository(db),
+		Jira:   jira_client_service.NewProjectMetaClient(&cfg),
+		Boards: boardSvc,
+		Recalc: sprintBackfillSvc,
+		// The active sprint of the project's boards: "week N" rituals count from it.
+		SprintStart: func(ctx context.Context, projectKey string) (time.Time, bool) {
+			rows, err := db.QueryContext(ctx, `SELECT boardID FROM ms_board WHERE projectKey = ? ORDER BY boardID`, projectKey)
+			if err != nil {
+				return time.Time{}, false
+			}
+			var boardIDs []int64
+			for rows.Next() {
+				var id int64
+				if rows.Scan(&id) == nil {
+					boardIDs = append(boardIDs, id)
+				}
+			}
+			rows.Close()
+			for _, id := range boardIDs {
+				if sprint, found, err := boardSvc.ActiveSprint(ctx, id); err == nil && found {
+					if start, ok := sprint.StartTime(); ok {
+						return start, true
+					}
+				}
+			}
+			return time.Time{}, false
+		},
 		Lifetime: shutdownMgr.Context(),
 	})
 	if err := trackingRuleSvc.Reload(context.Background()); err != nil {

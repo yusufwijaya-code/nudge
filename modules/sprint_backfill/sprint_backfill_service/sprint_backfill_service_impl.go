@@ -46,6 +46,17 @@ type sprintBackfillServiceImpl struct {
 	now           func() time.Time
 	// recalcLocks keeps one recalculation per user at a time.
 	recalcLocks sync.Map
+	// sprintStart is when a sprint began (nil = unknown), for the "week N of the
+	// sprint" excluded slots of a project-wide recalculation.
+	sprintStart func(ctx context.Context, sprintID int64) (time.Time, bool)
+}
+
+// Option tunes the service.
+type Option func(*sprintBackfillServiceImpl)
+
+// WithSprintStart supplies the start date of a sprint by id.
+func WithSprintStart(fn func(ctx context.Context, sprintID int64) (time.Time, bool)) Option {
+	return func(s *sprintBackfillServiceImpl) { s.sprintStart = fn }
 }
 
 func NewSprintBackfillService(
@@ -55,11 +66,16 @@ func NewSprintBackfillService(
 	sessions issue_session_repository.SessionBackfillRepository,
 	businessHours business_hours_service.BusinessHoursService,
 	calendar business_hours_dto.CalendarSource,
+	opts ...Option,
 ) SprintBackfillService {
-	return &sprintBackfillServiceImpl{
+	s := &sprintBackfillServiceImpl{
 		jira: jira, users: users, credentials: credentials, sessions: sessions,
 		businessHours: businessHours, calendar: calendar, now: time.Now,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 func (s *sprintBackfillServiceImpl) RunForEmail(ctx context.Context, email string) (int, int, error) {
@@ -200,12 +216,73 @@ func (s *sprintBackfillServiceImpl) RecalculateForEmail(ctx context.Context, ema
 	return s.recalculateIssues(ctx, *user, cred, issues, nil), nil
 }
 
+// RecalculateProject rewrites the time of every session of the project, in
+// every sprint, from Jira's changelog, with the project's excluded slots (Daily
+// Stand Up, Sprint Planning...) left out. A "week N of the sprint" slot counts
+// from that session's own sprint; a session without a known sprint only gets
+// the every-week slots. Only finished runs are counted: a run still going stays
+// with the poller, which uses the same calendar from now on.
+func (s *sprintBackfillServiceImpl) RecalculateProject(ctx context.Context, projectKey string) int {
+	if !jira_account_holder.Configured() {
+		jira_account_holder.NoteMissing("sprint_backfill")
+		return 0
+	}
+	sessions, err := s.sessions.ListSessionsByProject(ctx, projectKey)
+	if err != nil {
+		log.Printf("sprint_backfill: listing the sessions of %s failed: %v", projectKey, err)
+		return 0
+	}
+	starts := map[int64]time.Time{}
+	sprintStart := func(id int64) time.Time {
+		if start, seen := starts[id]; seen {
+			return start
+		}
+		var start time.Time
+		if s.sprintStart != nil {
+			if t, ok := s.sprintStart(ctx, id); ok {
+				start = t
+			}
+		}
+		starts[id] = start
+		return start
+	}
+
+	updated := 0
+	for _, ss := range sessions {
+		if ctx.Err() != nil {
+			break
+		}
+		cal := s.calendar.ForEmail(ctx, ss.AssigneeEmail).ForProject(projectKey)
+		// The active sprint's start is wrong for an older sprint: use the session's own.
+		cal = cal.WithSprintStart(time.Time{})
+		if ss.SprintID != nil {
+			cal = cal.WithSprintStart(sprintStart(*ss.SprintID))
+		}
+		histories, err := s.jira.GetChangelog(ctx, nil, ss.IssueKey)
+		if err != nil {
+			log.Printf("sprint_backfill: recalculating %s skipped: %v", ss.IssueKey, err)
+			continue
+		}
+		seconds, found := jira_client_dto.TrackedSeconds(histories, jira_client_dto.RuleForIssue(ss.IssueKey), func(start, end time.Time) int64 {
+			return s.businessHours.ElapsedBusinessSeconds(start, end, cal)
+		})
+		if !found {
+			continue
+		}
+		if err := s.sessions.UpdateAccumulatedSeconds(ctx, ss.IssueKey, seconds); err != nil {
+			log.Printf("sprint_backfill: recalculating %s failed: %v", ss.IssueKey, err)
+			continue
+		}
+		updated++
+	}
+	return updated
+}
+
 // recalculateIssues rewrites accumulatedSeconds of user's existing
 // active-sprint sessions among issues from the changelog (skip: keys left
 // alone, e.g. just backfilled). Returns how many were rewritten.
 func (s *sprintBackfillServiceImpl) recalculateIssues(ctx context.Context, user registration_dto.User, cred *jira_client_dto.Credential, issues []jira_client_dto.Issue, skip map[string]bool) int {
-	cal := s.calendar.ForEmail(ctx, user.Email)
-	elapsed := func(start, end time.Time) int64 { return s.businessHours.ElapsedBusinessSeconds(start, end, cal) }
+	userCal := s.calendar.ForEmail(ctx, user.Email)
 
 	updated := 0
 	for _, issue := range issues {
@@ -227,6 +304,9 @@ func (s *sprintBackfillServiceImpl) recalculateIssues(ctx context.Context, user 
 			log.Printf("sprint_backfill: recalculating %s skipped: %v", issue.Key, err)
 			continue
 		}
+		// The project's Daily Stand Up / Sprint Planning slots do not count.
+		cal := userCal.ForProject(jira_client_dto.ProjectKeyOf(issue.Key))
+		elapsed := func(start, end time.Time) int64 { return s.businessHours.ElapsedBusinessSeconds(start, end, cal) }
 		seconds, found := jira_client_dto.TrackedSeconds(histories, jira_client_dto.RuleForIssue(issue.Key), elapsed)
 		if !found {
 			continue
@@ -266,7 +346,7 @@ func (s *sprintBackfillServiceImpl) backfillIssue(ctx context.Context, user regi
 	if err != nil {
 		return false, err
 	}
-	cal := s.calendar.ForEmail(ctx, user.Email)
+	cal := s.calendar.ForEmail(ctx, user.Email).ForProject(jira_client_dto.ProjectKeyOf(issue.Key))
 	seconds, found := jira_client_dto.TrackedSeconds(histories, rule, func(start, end time.Time) int64 {
 		return s.businessHours.ElapsedBusinessSeconds(start, end, cal)
 	})

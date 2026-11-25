@@ -20,6 +20,17 @@ type SessionBackfillRepository interface {
 	// change (Tech Spec "Papan Tiket & Cuti", AC4.2); the running period and
 	// flagActive are left as they are.
 	UpdateAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error
+	// ListSessionsByProject returns every session of the project, in every
+	// sprint, so the board's excluded slots can be applied to all of them.
+	ListSessionsByProject(ctx context.Context, projectKey string) ([]ProjectSession, error)
+}
+
+// ProjectSession is the part of a session a project-wide recalculation needs.
+type ProjectSession struct {
+	IssueKey      string
+	AssigneeEmail string
+	// SprintID is nil for sessions recorded before sprints were tracked.
+	SprintID *int64
 }
 
 // BackfillCreatedBy marks sessions written by the backfill.
@@ -73,4 +84,28 @@ func (r *sessionBackfillRepositoryImpl) UpdateAccumulatedSeconds(ctx context.Con
 		SET accumulatedSeconds = ?, editedBy = ?, editedDate = CURRENT_TIMESTAMP
 		WHERE issueKey = ?`, seconds, LeaveRecalcEditedBy, issueKey)
 	return err
+}
+
+func (r *sessionBackfillRepositoryImpl) ListSessionsByProject(ctx context.Context, projectKey string) ([]ProjectSession, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT issueKey, assigneeEmail, sprintID FROM tr_issuesession WHERE projectKey = ? ORDER BY issueKey`, projectKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ProjectSession
+	for rows.Next() {
+		var ps ProjectSession
+		var email sql.NullString
+		var sprint sql.NullInt64
+		if err := rows.Scan(&ps.IssueKey, &email, &sprint); err != nil {
+			return nil, err
+		}
+		ps.AssigneeEmail = email.String
+		if sprint.Valid {
+			id := sprint.Int64
+			ps.SprintID = &id
+		}
+		out = append(out, ps)
+	}
+	return out, rows.Err()
 }

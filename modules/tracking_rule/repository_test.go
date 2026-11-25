@@ -134,3 +134,30 @@ func TestRepository_InsertFindUpdateSetActive(t *testing.T) {
 		t.Fatalf("unknown key: found=%v err=%v", found, err)
 	}
 }
+
+func TestRepository_TheExcludedScheduleSurvivesAWriteAndAnUpdate(t *testing.T) {
+	repo := setupRepo(t)
+	ctx := context.Background()
+	rule := Rule{ProjectKey: "ZZTRT3", ProjectName: "x", TrackedStatuses: []string{"A"}, DoneStatus: "B",
+		StoryPointFields: []string{"customfield_1"}, StoryPointWriteField: "customfield_1", StoryPointWriteFieldSubtask: "customfield_1",
+		IsActive: true, EditedBy: "t", Excluded: *schedule()}
+	if err := repo.Insert(ctx, rule); err != nil {
+		t.Fatal(err)
+	}
+	got, found, err := repo.Find(ctx, "ZZTRT3")
+	if err != nil || !found {
+		t.Fatalf("Find: %v %v", found, err)
+	}
+	if !reflect.DeepEqual(got.Excluded, *schedule()) {
+		t.Errorf("excluded = %+v, want %+v", got.Excluded, *schedule())
+	}
+
+	rule.Excluded = ExcludedSchedule{}
+	if err := repo.Update(ctx, rule); err != nil {
+		t.Fatal(err)
+	}
+	got, _, _ = repo.Find(ctx, "ZZTRT3")
+	if !got.Excluded.IsZero() {
+		t.Errorf("after clearing: %+v, want nothing excluded", got.Excluded)
+	}
+}

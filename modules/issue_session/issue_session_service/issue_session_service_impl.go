@@ -63,6 +63,8 @@ func (s *issueSessionServiceImpl) UpdateActiveSprint(ctx context.Context, issueK
 func CalculateElapsedSeconds(session issue_session_dto.IssueSession, bh business_hours_service.BusinessHoursService, cal business_hours_dto.HolidayCalendar) int64 {
 	elapsedSeconds := session.AccumulatedSeconds
 	if session.CurrentSessionStartedDate != nil {
+		// The project's Daily Stand Up / Sprint Planning slots do not count.
+		cal = cal.ForProject(session.ProjectKey)
 		elapsedSeconds += bh.ElapsedBusinessSeconds(*session.CurrentSessionStartedDate, time.Now(), cal)
 	}
 	return elapsedSeconds

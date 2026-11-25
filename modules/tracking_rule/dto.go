@@ -22,9 +22,11 @@ type Rule struct {
 	StoryPointWriteFieldSubtask string
 	// CreateFields: issue type id → optional fields Buat Card shows (nil = none).
 	CreateFields map[string][]string
-	IsActive     bool
-	EditedBy     string
-	EditedDate   time.Time
+	// Excluded: the DSU and rituals whose hours are not counted.
+	Excluded   ExcludedSchedule
+	IsActive   bool
+	EditedBy   string
+	EditedDate time.Time
 	// AvatarBoardID: a board of this project with a cached avatar (0 = none).
 	AvatarBoardID int64
 }
@@ -61,9 +63,13 @@ type RuleView struct {
 	StoryPointWriteFieldSubtask string     `json:"storyPointWriteFieldSubtask"`
 	// CreateFields: issue type id → optional field ids shown on Buat Card ({} = none).
 	CreateFields map[string][]string `json:"createFields"`
-	IsActive     bool                `json:"isActive"`
-	EditedBy     string              `json:"editedBy"`
-	EditedDate   time.Time           `json:"editedDate"`
+	// Excluded: DSU and rituals whose hours are not counted toward ticket time.
+	Excluded   ExcludedSchedule `json:"excluded"`
+	IsActive   bool             `json:"isActive"`
+	EditedBy   string           `json:"editedBy"`
+	EditedDate time.Time        `json:"editedDate"`
+	// Recalculating: saving started a recalculation of every sprint from Jira in the background.
+	Recalculating bool `json:"recalculating"`
 	// BoardID: serve the project picture via GET /api/dashboard/boards/:boardId/avatar (null = no picture).
 	BoardID *int64 `json:"boardId"`
 }
@@ -78,6 +84,7 @@ type RuleInput struct {
 	StoryPointWriteField        string              `json:"storyPointWriteField"`
 	StoryPointWriteFieldSubtask string              `json:"storyPointWriteFieldSubtask"`
 	CreateFields                map[string][]string `json:"createFields"`
+	Excluded                    *ExcludedSchedule   `json:"excluded"`
 }
 
 // Lookup is what the form picks from: GET /admin/tracking-rules/jira/:projectKey.

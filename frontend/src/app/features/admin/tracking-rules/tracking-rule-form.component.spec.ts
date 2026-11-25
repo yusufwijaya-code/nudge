@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { Subject, of, throwError } from 'rxjs';
 import { TrackingRuleFormComponent } from './tracking-rule-form.component';
 import { CreateFieldType, JiraProjectLookup, TrackingRule, TrackingRuleService } from '../../../core/services/tracking-rule.service';
+import { clampMinutes, slotEnd } from './tracking-rule-form.component';
 import { ToastService } from '../../../core/ui/toast.service';
 
 const POS: JiraProjectLookup = {
@@ -155,7 +156,7 @@ describe('TrackingRuleFormComponent', () => {
     expect(api.create).toHaveBeenCalledWith({
       projectKey: 'POS', trackedStatuses: ['In Progress'], doneStatus: 'Done', reviewStatus: null,
       storyPointFields: ['customfield_10016'], storyPointWriteField: 'customfield_10016', storyPointWriteFieldSubtask: 'customfield_10016',
-      createFields: {},
+      createFields: {}, excluded: { dsu: [], rituals: [] },
     });
     expect(toast.show.calls.mostRecent().args[4]!.label).toBe('Hitung ulang semua user');
     expect(router.navigate).toHaveBeenCalledWith(['/admin/tracking-rules']);
@@ -286,6 +287,132 @@ describe('TrackingRuleFormComponent', () => {
       (el.querySelector('[data-cf-retry]') as HTMLButtonElement).click(); fixture.detectChanges();
       expect(el.querySelector('[data-cf-error]')).toBeNull();
       expect(el.querySelectorAll('[data-cf-type]').length).toBe(2);
+    });
+  });
+
+  describe('Jadwal yang tidak dihitung', () => {
+    function posForm() {
+      setup(null);
+      api.lookup.and.returnValue(of(POS));
+      api.create.and.returnValue(of({ ...CORE_RULE, projectKey: 'POS', recalculating: true }));
+      const r = create();
+      spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      r.c.onKeyInput('POS');
+      r.c.runLookup();
+      r.c.toggleTracked('In Progress');
+      r.c.setDone('Done');
+      r.c.addField('customfield_10016');
+      r.fixture.detectChanges();
+      return r;
+    }
+
+    it('shows the five weekdays with no DSU ticked and no ritual', () => {
+      const { el } = posForm();
+      expect(el.querySelectorAll('[data-dsu-day]').length).toBe(5);
+      expect(el.querySelectorAll('[data-dsu-day].on').length).toBe(0);
+      expect(el.querySelector('[data-no-rituals]')).not.toBeNull();
+    });
+
+    it('saves the ticked DSU days and the rituals with the rule', () => {
+      const { fixture, el, c } = posForm();
+      c.setDsu(1, { on: true });
+      c.setDsu(2, { on: true, start: '09:00', minutes: 15 });
+      c.addRitual();
+      c.setRitual(0, { name: ' Sprint Planning / Grooming ', weekday: 1, start: '11:00', minutes: 390, frequency: 'sprint_week', sprintWeek: 2 });
+      c.addRitual();
+      c.setRitual(1, { name: 'Retro', enabled: false, weekday: 5, start: '15:00', minutes: 60 });
+      fixture.detectChanges();
+      (el.querySelector('[data-save]') as HTMLButtonElement).click();
+
+      expect(api.create.calls.mostRecent().args[0].excluded).toEqual({
+        dsu: [{ weekday: 2, start: '08:45', minutes: 30 }, { weekday: 3, start: '09:00', minutes: 15 }],
+        rituals: [
+          { name: 'Sprint Planning / Grooming', enabled: true, weekday: 1, start: '11:00', minutes: 390, frequency: 'sprint_week', sprintWeek: 2 },
+          { name: 'Retro', enabled: false, weekday: 5, start: '15:00', minutes: 60, frequency: 'weekly', sprintWeek: 0 },
+        ],
+      });
+    });
+
+    it('shows what a ritual cuts, in words, and when it applies', () => {
+      const { fixture, el, c } = posForm();
+      c.addRitual();
+      c.setRitual(0, { name: 'Sprint Planning / Grooming', start: '11:00', minutes: 390, frequency: 'sprint_week', sprintWeek: 2 });
+      fixture.detectChanges();
+      const cut = el.querySelector('[data-cut]')!.textContent!.replace(/\s+/g, ' ');
+      expect(cut).toContain('11:00 – 17:30');
+      expect(cut).toContain('6 jam 30 menit');
+      expect(cut).toContain('Hanya berlaku di minggu ke-2 sprint');
+      c.setRitual(0, { frequency: 'weekly' });
+      fixture.detectChanges();
+      expect(el.querySelector('[data-cut]')!.textContent).toContain('Berlaku setiap minggu');
+    });
+
+    it('will not save a ritual without a name', () => {
+      const { fixture, el, c } = posForm();
+      c.addRitual();
+      fixture.detectChanges();
+      expect((el.querySelector('[data-save]') as HTMLButtonElement).disabled).toBeTrue();
+      c.setRitual(0, { name: 'Grooming' });
+      fixture.detectChanges();
+      expect((el.querySelector('[data-save]') as HTMLButtonElement).disabled).toBeFalse();
+    });
+
+    it('adds and removes rituals, up to ten', () => {
+      const { fixture, el, c } = posForm();
+      for (let i = 0; i < 12; i++) c.addRitual();
+      fixture.detectChanges();
+      expect(c.rituals().length).toBe(10);
+      expect((el.querySelector('[data-add-ritual]') as HTMLButtonElement).disabled).toBeTrue();
+      (el.querySelector('[data-remove-ritual]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(c.rituals().length).toBe(9);
+    });
+
+    it('loads the stored schedule on Edit and shows the server message when it is refused', () => {
+      setup('OMS');
+      // Jira still has everything the stored rule uses, so saving is allowed.
+      api.lookup.and.returnValue(of({
+        projectKey: 'OMS', projectName: 'ESB OMS', avatarUrl: '',
+        statuses: ['Code Process', 'CODE REVIEW', 'Code Completed'],
+        numberFields: [
+          { id: 'customfield_10125', name: 'Story Point Estimate', storyPointLike: true },
+          { id: 'customfield_11053', name: 'Story Points', storyPointLike: true },
+        ],
+      }));
+      api.list.and.returnValue(of({ rules: [{ ...CORE_RULE, projectKey: 'OMS', excluded: {
+        dsu: [{ weekday: 3, start: '08:45', minutes: 30 }],
+        rituals: [{ name: 'Grooming', enabled: true, weekday: 1, start: '11:00', minutes: 60, frequency: 'weekly', sprintWeek: 0 }],
+      } }] }));
+      const { fixture, el, c } = create();
+      fixture.detectChanges();
+      expect(el.querySelector('[data-dsu-day="3"]')?.classList).toContain('on');
+      expect(el.querySelector('[data-dsu-day="2"]')?.classList).not.toContain('on');
+      expect(c.rituals()[0].name).toBe('Grooming');
+
+      api.update.and.returnValue(throwError(() => ({ status: 400, error: { error: 'validation_failed', fields: { excluded: 'Daily Stand Up hanya satu per hari' } } })));
+      (el.querySelector('[data-save]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(el.querySelector('[data-excluded-error]')?.textContent).toContain('hanya satu per hari');
+    });
+
+    it('says in the toast that the sprints are being recalculated', () => {
+      const { el } = posForm();
+      (el.querySelector('[data-save]') as HTMLButtonElement).click();
+      expect(toast.show.calls.mostRecent().args[2]).toContain('semua sprint POS sedang dihitung ulang dari Jira');
+    });
+  });
+
+  describe('slot helpers', () => {
+    it('ends a slot at start + minutes, capped at midnight', () => {
+      expect(slotEnd('11:00', 390)).toBe('17:30');
+      expect(slotEnd('08:45', 30)).toBe('09:15');
+      expect(slotEnd('23:30', 120)).toBe('24:00');
+    });
+    it('keeps a typed length inside 1..540', () => {
+      expect(clampMinutes(0)).toBe(1);
+      expect(clampMinutes('abc')).toBe(1);
+      expect(clampMinutes(30.4)).toBe(30);
+      expect(clampMinutes(9999)).toBe(540);
     });
   });
 });

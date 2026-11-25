@@ -210,7 +210,7 @@ func (p *pollerServiceImpl) pollOnce(ctx context.Context) error {
 		}
 		additionalSeconds := int64(0)
 		if session.CurrentSessionStartedDate != nil {
-			additionalSeconds = p.businessHours.ElapsedBusinessSeconds(*session.CurrentSessionStartedDate, time.Now(), p.holidayCalendar.ForEmail(ctx, session.AssigneeEmail))
+			additionalSeconds = p.businessHours.ElapsedBusinessSeconds(*session.CurrentSessionStartedDate, time.Now(), p.holidayCalendar.ForEmail(ctx, session.AssigneeEmail).ForProject(session.ProjectKey))
 		}
 
 		if err := p.issueSession.CloseSession(ctx, key, additionalSeconds); err != nil {
@@ -386,7 +386,7 @@ func (p *pollerServiceImpl) sessionStart(ctx context.Context, issueKey, assignee
 	if !existed {
 		return runStart, nil, nil
 	}
-	cal := p.holidayCalendar.ForEmail(ctx, assigneeEmail)
+	cal := p.holidayCalendar.ForEmail(ctx, assigneeEmail).ForProject(projectKeyFromIssueKey(issueKey))
 	seconds, err := p.jiraClient.GetClosedRunSeconds(ctx, issueKey, func(from, to time.Time) int64 {
 		return p.businessHours.ElapsedBusinessSeconds(from, to, cal)
 	})

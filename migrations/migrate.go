@@ -106,6 +106,9 @@ var credentialExpirySQL string
 //go:embed 0024b_jira_account_expiry.sql
 var jiraAccountExpirySQL string
 
+//go:embed 0025_tracking_rule_excluded.sql
+var trackingRuleExcludedSQL string
+
 // mysqlDeadlockErrNo / mysqlLockWaitTimeoutErrNo are retried: go test runs
 // every package in parallel and each one calls Apply against the same
 // schema, so concurrent DDL/backfill can collide. Every step is
@@ -233,6 +236,10 @@ func apply(db *sql.DB) error {
 		return err
 	}
 	if _, err := db.Exec(jiraAccountExpirySQL); err != nil {
+		return err
+	}
+	// Aturan Board › Jadwal yang tidak dihitung — one ADD COLUMN.
+	if err := addColumnIfNotExists(db, trackingRuleExcludedSQL); err != nil {
 		return err
 	}
 	// The new toggle starts ON when either old toggle was ON — exactly once

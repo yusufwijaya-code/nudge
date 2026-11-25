@@ -25,4 +25,8 @@ type SprintBackfillService interface {
 	// Only finished runs are counted; the running period stays with the
 	// poller. Returns how many sessions were rewritten.
 	RecalculateForEmail(ctx context.Context, email string) (updated int, err error)
+	// RecalculateProject rewrites the time of every session of the project, in
+	// every sprint, from the changelog with the project's excluded slots left
+	// out. Returns how many sessions were rewritten.
+	RecalculateProject(ctx context.Context, projectKey string) (updated int)
 }
