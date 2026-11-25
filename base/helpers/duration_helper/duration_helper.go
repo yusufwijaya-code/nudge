@@ -1,25 +1,34 @@
 package duration_helper
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
-// Clock renders a second count the way a stopwatch does: H:MM:SS, or M:SS when
-// there is no full hour, or just "S detik" when there is no full minute either.
-// No days: 45 hours is "45:00:00". The sign is ignored (callers say "lewat" /
-// "sisa" themselves).
-//
-//	8948 -> "2:29:08"    2220 -> "37:00"    52 -> "52 detik"    0 -> "0 detik"
-func Clock(totalSeconds int64) string {
+// Format writes a second count in words, leaving out any unit that is zero:
+// "1 jam 34 menit 20 detik", "30 menit", "1 jam 30 detik", "52 detik". No days:
+// 45 hours is "45 jam". Zero is "0 detik". The sign is ignored (callers say
+// "lewat" / "sisa" themselves).
+func Format(totalSeconds int64) string {
 	if totalSeconds < 0 {
 		totalSeconds = -totalSeconds
 	}
 	hours := totalSeconds / 3600
 	minutes := (totalSeconds % 3600) / 60
 	seconds := totalSeconds % 60
-	switch {
-	case hours > 0:
-		return fmt.Sprintf("%d:%02d:%02d", hours, minutes, seconds)
-	case minutes > 0:
-		return fmt.Sprintf("%d:%02d", minutes, seconds)
+
+	var parts []string
+	if hours > 0 {
+		parts = append(parts, fmt.Sprintf("%d jam", hours))
 	}
-	return fmt.Sprintf("%d detik", seconds)
+	if minutes > 0 {
+		parts = append(parts, fmt.Sprintf("%d menit", minutes))
+	}
+	if seconds > 0 {
+		parts = append(parts, fmt.Sprintf("%d detik", seconds))
+	}
+	if len(parts) == 0 {
+		return "0 detik"
+	}
+	return strings.Join(parts, " ")
 }

@@ -12,6 +12,7 @@ import (
 	"nudge/modules/business_hours/business_hours_dto"
 	"nudge/modules/business_hours/business_hours_service"
 	"nudge/modules/issue_session/issue_session_dto"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/registration/registration_dto"
 )
@@ -281,5 +282,20 @@ func TestRecalculateForEmail_SkipsTheRunningPeriod(t *testing.T) {
 	}
 	if got := sessions.updated["OMS-1"]; got != 8*3600 {
 		t.Errorf("OMS-1 accumulated = %d, want only the finished Monday run (%d)", got, 8*3600)
+	}
+}
+
+func TestRunAll_DoesNothingWithoutAJiraAccount(t *testing.T) {
+	prev := jira_account_holder.Override()
+	jira_account_holder.SetOverride(nil)
+	t.Cleanup(func() { jira_account_holder.SetOverride(prev) })
+
+	jira := &fakeJira{
+		sprint:     []jira_client_dto.Issue{ticket("CORE-1", "Done", activeSprint, sp(1), "")},
+		changelogs: map[string][]jira_client_dto.ChangelogEntry{"CORE-1": cpThenReview()},
+	}
+	sessions := &fakeSessions{}
+	if added := newService(jira, &fakeUsers{users: []registration_dto.User{yusuf}}, sessions).RunAll(context.Background()); added != 0 {
+		t.Errorf("RunAll = %d, want 0 without a Jira account", added)
 	}
 }

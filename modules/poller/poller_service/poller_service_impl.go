@@ -12,6 +12,7 @@ import (
 	"nudge/modules/business_hours/business_hours_service"
 	"nudge/modules/issue_session/issue_session_dto"
 	"nudge/modules/issue_session/issue_session_service"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/jira_client/jira_client_service"
 	"nudge/modules/registration/registration_repository"
@@ -150,6 +151,10 @@ func (p *pollerServiceImpl) Run(ctx context.Context) {
 }
 
 func (p *pollerServiceImpl) pollOnce(ctx context.Context) error {
+	if !jira_account_holder.Configured() {
+		jira_account_holder.NoteMissing("poller")
+		return nil
+	}
 	// No active tracking rule (only possible via a manual DB change): search
 	// nothing and leave every session as it is (AC1.4).
 	if jira_client_dto.TrackedIssuesJQL() == "" {
@@ -280,6 +285,10 @@ func (p *pollerServiceImpl) pollOnce(ctx context.Context) error {
 // changelog transition time, not at process-start time — otherwise a ticket
 // that has been in Code Process for days would appear to have just started.
 func (p *pollerServiceImpl) backfillActiveSessions(ctx context.Context) error {
+	if !jira_account_holder.Configured() {
+		jira_account_holder.NoteMissing("poller")
+		return nil
+	}
 	// No active tracking rule (only possible via a manual DB change): search
 	// nothing and leave every session as it is (AC1.4).
 	if jira_client_dto.TrackedIssuesJQL() == "" {

@@ -5,12 +5,13 @@ import { SettingsApi } from '../../../core/services/settings-api';
 import { ConfirmService } from '../../../core/ui/confirm.service';
 import { ToastService } from '../../../core/ui/toast.service';
 import { IconComponent } from '../../../shared/ui/icon.component';
-import { expiryDateLabel, expiryDistance, tokenExpiry } from '../../../core/jira-token-expiry';
+import { expiryDateLabel, expiryDistance, expiryMaxDay, tokenExpiry } from '../../../core/jira-token-expiry';
+import { DateRange, DateRangePickerComponent } from '../../../shared/ui/date-range-picker.component';
 
 @Component({
   selector: 'app-jira-credential',
   standalone: true,
-  imports: [ReactiveFormsModule, NgIf, IconComponent],
+  imports: [ReactiveFormsModule, NgIf, IconComponent, DateRangePickerComponent],
   templateUrl: './jira-credential.component.html',
 })
 export class JiraCredentialComponent implements OnInit {
@@ -88,8 +89,19 @@ export class JiraCredentialComponent implements OnInit {
   protected readonly expiryDateLabel = expiryDateLabel;
   protected readonly expiryDistance = expiryDistance;
 
-  protected onExpiryInput(event: Event): void {
-    this.draft = (event.target as HTMLInputElement).value;
+  protected readonly maxDay = expiryMaxDay();
+
+  /** The day picked in the setup form. */
+  protected onExpiresPicked(range: DateRange): void {
+    const control = this.form.controls.expiresAt;
+    control.setValue(range.from);
+    control.markAsDirty();
+    control.markAsTouched();
+  }
+
+  /** The day picked in the inline editor ("Hapus" gives '' = forget the date). */
+  protected onExpiryPicked(range: DateRange): void {
+    this.draft = range.from;
   }
 
   /** Changes only the date of the saved token. */

@@ -2,20 +2,28 @@ package jira_account_holder
 
 import "testing"
 
-func TestCurrent_UsesTheEnvPairUntilAnAccountIsSaved(t *testing.T) {
+func TestCurrent_IsEmptyUntilAnAccountIsSet(t *testing.T) {
 	SetOverride(nil)
 	t.Cleanup(func() { SetOverride(nil) })
 
-	if email, token := Current("env@esb.co.id", "env-token"); email != "env@esb.co.id" || token != "env-token" {
-		t.Errorf("Current = %q / %q, want env", email, token)
+	if email, token, ok := Current(); ok || email != "" || token != "" {
+		t.Errorf("Current = %q / %q / %v, want nothing before an account is set", email, token, ok)
 	}
+	if Configured() {
+		t.Error("Configured must be false before an account is set")
+	}
+
 	SetOverride(&Credential{Email: "bot@esb.co.id", APIToken: "saved-token"})
-	if email, token := Current("env@esb.co.id", "env-token"); email != "bot@esb.co.id" || token != "saved-token" {
-		t.Errorf("Current = %q / %q, want the saved account", email, token)
+	if email, token, ok := Current(); !ok || email != "bot@esb.co.id" || token != "saved-token" {
+		t.Errorf("Current = %q / %q / %v, want the saved account", email, token, ok)
 	}
+	if !Configured() {
+		t.Error("Configured must be true once an account is set")
+	}
+
 	SetOverride(nil)
-	if email, _ := Current("env@esb.co.id", "env-token"); email != "env@esb.co.id" {
-		t.Errorf("Current = %q, want env after clearing", email)
+	if _, _, ok := Current(); ok {
+		t.Error("Current must be empty again after removing the account")
 	}
 }
 
@@ -26,7 +34,7 @@ func TestOverride_ReturnsACopy(t *testing.T) {
 
 	got := Override()
 	got.APIToken = "tampered"
-	if _, token := Current("e", "t"); token != "saved-token" {
+	if _, token, _ := Current(); token != "saved-token" {
 		t.Errorf("token in force = %q after mutating the copy", token)
 	}
 	SetOverride(nil)

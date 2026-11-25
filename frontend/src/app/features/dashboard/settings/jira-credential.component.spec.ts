@@ -136,7 +136,8 @@ describe('JiraCredentialComponent', () => {
     it('asks for the expiry date in the setup form and will not save without it', () => {
       fixture.componentRef.setInput('hasCredential', false);
       fixture.detectChanges();
-      expect(el().querySelector('input#expiresAt[type="date"]')).not.toBeNull();
+      expect(el().querySelector('app-date-range-picker#expiresAt')).not.toBeNull();
+      expect(el().querySelector('input[type="date"]')).toBeNull();
 
       fixture.componentInstance['form'].setValue({ jiraEmail: 'a@esb.co.id', apiToken: 'tok123', expiresAt: '' });
       fixture.componentInstance['onSubmit']();
@@ -181,9 +182,8 @@ describe('JiraCredentialComponent', () => {
       const emitted = jasmine.createSpy('emitted');
       fixture.componentInstance.credentialChanged.subscribe(emitted);
 
-      const input = el().querySelector('#expiresAtEdit') as HTMLInputElement;
-      input.value = '2027-01-15';
-      input.dispatchEvent(new Event('input'));
+      fixture.componentInstance['onExpiryPicked']({ from: '2027-01-15', to: '' });
+      fixture.detectChanges();
       (el().querySelector('[data-save-expiry]') as HTMLButtonElement).click();
 
       expect(boardService.saveCredentialExpiry).toHaveBeenCalledWith('2027-01-15');

@@ -108,11 +108,11 @@ describe('dashboard helpers', () => {
   });
 
   it('formats short durations', () => {
-    expect(shortDuration(9312)).toBe('2:35:12');
-    expect(shortDuration(9300)).toBe('2:35:00');
-    expect(shortDuration(-900)).toBe('15:00');
-    expect(shortDuration(3600)).toBe('1:00:00');
-    expect(shortDuration(90_000)).toBe('25:00:00');
+    expect(shortDuration(9312)).toBe('2 jam 35 menit 12 detik');
+    expect(shortDuration(9300)).toBe('2 jam 35 menit');
+    expect(shortDuration(-900)).toBe('15 menit');
+    expect(shortDuration(3600)).toBe('1 jam');
+    expect(shortDuration(90_000)).toBe('25 jam');
     expect(shortDuration(30)).toBe('30 detik');
     expect(shortDuration(0)).toBe('0 detik');
     // PL-11859: 2.5 jam used to hide that only 52 seconds were left.
@@ -120,8 +120,8 @@ describe('dashboard helpers', () => {
   });
 
   it('formats sprint-report hours down to the second', () => {
-    expect(hoursDuration(2.5)).toBe('2:30:00');
-    expect(hoursDuration(2 + 29 / 60 + 8 / 3600)).toBe('2:29:08');
+    expect(hoursDuration(2.5)).toBe('2 jam 30 menit');
+    expect(hoursDuration(2 + 29 / 60 + 8 / 3600)).toBe('2 jam 29 menit 8 detik');
     expect(hoursDuration(0)).toBe('0 detik');
   });
 
@@ -290,10 +290,10 @@ describe('HomeComponent', () => {
   it('shows elapsed vs budget, remaining and deadline like the DM reminder', () => {
     const [over, ok] = Array.from(el().querySelectorAll('[data-card="active"] .ticket-row'));
     const meta = (row: Element, key: string) => row.querySelector(`[data-meta="${key}"]`)?.textContent?.replace(/\s+/g, ' ').trim();
-    expect(meta(ok, 'elapsed')).toBe('Berjalan 30:00 dari 1:00:00 (1 SP)');
-    expect(meta(ok, 'remaining')).toBe('Sisa 30:00');
-    expect(meta(over, 'elapsed')).toBe('Berjalan 1:15:00 dari 1:00:00 (1 SP)');
-    expect(meta(over, 'remaining')).toBe('Lewat 15:00');
+    expect(meta(ok, 'elapsed')).toBe('Berjalan 30 menit dari 1 jam (1 SP)');
+    expect(meta(ok, 'remaining')).toBe('Sisa 30 menit');
+    expect(meta(over, 'elapsed')).toBe('Berjalan 1 jam 15 menit dari 1 jam (1 SP)');
+    expect(meta(over, 'remaining')).toBe('Lewat 15 menit');
     expect(meta(over, 'deadline')).toBeUndefined();
   });
 
@@ -578,7 +578,7 @@ describe('HomeComponent', () => {
       expect(rows.map((r) => r.querySelector('.ticket-key')?.textContent?.trim())).toEqual(['OMS-2', 'OMS-1']);
       expect((rows[0].querySelector('a.ticket-key') as HTMLAnchorElement).href).toBe('https://jira/browse/OMS-2');
       expect(rows[0].querySelector('.dev-badge')?.textContent?.trim()).toBe('+100%');
-      expect(rows[0].textContent).toContain('4:00:00 dari 2:00:00');
+      expect(rows[0].textContent).toContain('4 jam dari 2 jam');
       expect(rows[1].querySelector('.dev-badge')?.textContent?.trim()).toBe('0%');
     });
 

@@ -9,9 +9,16 @@ import (
 )
 
 type AppConfig struct {
-	JiraBaseURL             string
-	JiraEmail               string
-	JiraAPIToken            string
+	JiraBaseURL string
+	// LegacyJiraEmail / LegacyJiraAPIToken are the JIRA_EMAIL / JIRA_API_TOKEN
+	// a server used before the Jira account moved to Admin > Akun Jira. They
+	// are read only to carry that account into the database once at start
+	// (jira_account.Service.Load); delete both from .env afterwards.
+	LegacyJiraEmail    string
+	LegacyJiraAPIToken string
+	// OperatorEmail is the Google Chat operator account: the one whose OAuth
+	// sends DMs (not the Jira account). OPERATOR_EMAIL, else ADMIN_EMAIL.
+	OperatorEmail           string
 	GoogleChatWebhookURL    string
 	MySQLHost               string
 	MySQLPort               string
@@ -103,8 +110,8 @@ func LoadConfig(cfg *AppConfig) error {
 	v.SetDefault("GOOGLE_GROUPS_TOKEN_PATH", "./data/groups_oauth_token.json")
 
 	cfg.JiraBaseURL = v.GetString("JIRA_BASE_URL")
-	cfg.JiraEmail = v.GetString("JIRA_EMAIL")
-	cfg.JiraAPIToken = v.GetString("JIRA_API_TOKEN")
+	cfg.LegacyJiraEmail = v.GetString("JIRA_EMAIL")
+	cfg.LegacyJiraAPIToken = v.GetString("JIRA_API_TOKEN")
 	cfg.GoogleChatWebhookURL = v.GetString("GOOGLE_CHAT_WEBHOOK_URL")
 	cfg.MySQLHost = v.GetString("MYSQL_HOST")
 	cfg.MySQLPort = v.GetString("MYSQL_PORT")
@@ -121,6 +128,10 @@ func LoadConfig(cfg *AppConfig) error {
 	cfg.GoogleSignInClientSecret = v.GetString("GOOGLE_SIGNIN_CLIENT_SECRET")
 	cfg.GoogleSignInRedirectURL = v.GetString("GOOGLE_SIGNIN_REDIRECT_URL")
 	cfg.AdminEmail = v.GetString("ADMIN_EMAIL")
+	cfg.OperatorEmail = strings.TrimSpace(v.GetString("OPERATOR_EMAIL"))
+	if cfg.OperatorEmail == "" {
+		cfg.OperatorEmail = cfg.AdminEmail
+	}
 	cfg.CredentialEncryptionKey = v.GetString("CREDENTIAL_ENCRYPTION_KEY")
 	cfg.BasePath = strings.TrimRight(v.GetString("BASE_PATH"), "/")
 	cfg.FrontendURL = strings.TrimRight(v.GetString("FRONTEND_URL"), "/")

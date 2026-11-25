@@ -170,7 +170,7 @@ func (s *jiraClientServiceImpl) FetchAvatar(ctx context.Context, avatarURL strin
 	if err != nil {
 		return nil, "", err
 	}
-	req.Header.Set("Authorization", basicAuthHeader(jira_account_holder.Current(s.cfg.JiraEmail, s.cfg.JiraAPIToken)))
+	req.Header.Set("Authorization", basicAuthHeader(centralCredential()))
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		return nil, "", fmt.Errorf("jira_client: FetchAvatar failed: %w", err)
@@ -272,4 +272,10 @@ func (s *jiraClientServiceImpl) GetRecentChangelog(ctx context.Context, issueKey
 		return last.Values, nil
 	}
 	return page.Values, nil
+}
+
+// centralCredential is the account an admin set up in Admin › Akun Jira.
+func centralCredential() (string, string) {
+	email, token, _ := jira_account_holder.Current()
+	return email, token
 }

@@ -22,11 +22,10 @@ func TestLoadConfig_ReadsFromEnvironmentVariables(t *testing.T) {
 	if cfg.JiraBaseURL != "https://esb-id.atlassian.net" {
 		t.Errorf("JiraBaseURL = %q, want %q", cfg.JiraBaseURL, "https://esb-id.atlassian.net")
 	}
-	if cfg.JiraEmail != "bot@esb.co.id" {
-		t.Errorf("JiraEmail = %q, want %q", cfg.JiraEmail, "bot@esb.co.id")
-	}
-	if cfg.JiraAPIToken != "secret-token" {
-		t.Errorf("JiraAPIToken = %q, want %q", cfg.JiraAPIToken, "secret-token")
+	// The Jira account is set in Admin > Akun Jira; the env pair is only read to
+	// carry an old server's account over once.
+	if cfg.LegacyJiraEmail != "bot@esb.co.id" || cfg.LegacyJiraAPIToken != "secret-token" {
+		t.Errorf("legacy Jira pair = %q / %q", cfg.LegacyJiraEmail, cfg.LegacyJiraAPIToken)
 	}
 	if cfg.Port != "9090" {
 		t.Errorf("Port = %q, want %q", cfg.Port, "9090")
@@ -160,5 +159,30 @@ func TestLoadConfig_GeminiDefaults(t *testing.T) {
 	}
 	if cfg.GeminiAPIKey != "abc" || cfg.GeminiModel != "gemini-flash-lite-latest" {
 		t.Fatalf("gemini = %q / %q", cfg.GeminiAPIKey, cfg.GeminiModel)
+	}
+}
+
+// JIRA_EMAIL used to double as the Chat operator; the operator now has its own
+// setting, falling back to the admin.
+func TestLoadConfig_OperatorEmailIsItsOwnSettingFallingBackToTheAdmin(t *testing.T) {
+	t.Setenv("ADMIN_EMAIL", "admin@esb.co.id")
+	t.Setenv("JIRA_EMAIL", "someone-else@esb.co.id")
+
+	t.Setenv("OPERATOR_EMAIL", " operator@esb.co.id ")
+	var cfg AppConfig
+	if err := LoadConfig(&cfg); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.OperatorEmail != "operator@esb.co.id" {
+		t.Errorf("OperatorEmail = %q, want OPERATOR_EMAIL, trimmed", cfg.OperatorEmail)
+	}
+
+	t.Setenv("OPERATOR_EMAIL", "")
+	var fallback AppConfig
+	if err := LoadConfig(&fallback); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if fallback.OperatorEmail != "admin@esb.co.id" {
+		t.Errorf("OperatorEmail = %q, want ADMIN_EMAIL (and never the Jira email)", fallback.OperatorEmail)
 	}
 }

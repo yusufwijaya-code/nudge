@@ -99,6 +99,8 @@ func (h *Handler) saveExpiry(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	case errors.Is(err, jira_credential_dto.ErrInvalidExpiry):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "tanggal kedaluwarsa tidak valid"})
+	case errors.Is(err, ErrNotConfigured):
+		c.JSON(http.StatusConflict, gin.H{"error": "belum ada akun Jira, isi akunnya dulu"})
 	default:
 		log.Printf("jira_account: saving the expiry failed: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal menyimpan tanggal kedaluwarsa"})
@@ -123,13 +125,16 @@ func (h *Handler) expiringUsers(c *gin.Context) {
 func (h *Handler) reset(c *gin.Context) {
 	if err := h.api.Reset(c.Request.Context()); err != nil {
 		log.Printf("jira_account: reset failed: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal mengembalikan ke env"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal menghapus akun Jira"})
 		return
 	}
 	c.Status(http.StatusNoContent)
 }
 
 func describe(err error) string {
+	if errors.Is(err, ErrNotConfigured) {
+		return "Belum ada akun Jira. Isi email dan API token di bawah."
+	}
 	if errors.Is(err, ErrRejected) {
 		return "Jira menolak credential ini (token salah atau sudah kedaluwarsa)."
 	}

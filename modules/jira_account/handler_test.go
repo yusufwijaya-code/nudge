@@ -140,6 +140,7 @@ func TestSaveExpiry_PassesTheDateAndMapsEveryOutcome(t *testing.T) {
 	}{
 		{"saved", nil, http.StatusOK},
 		{"bad date", jira_credential_dto.ErrInvalidExpiry, http.StatusBadRequest},
+		{"no account yet", ErrNotConfigured, http.StatusConflict},
 		{"storage failed", context.DeadlineExceeded, http.StatusInternalServerError},
 	}
 	for _, c := range cases {
@@ -168,5 +169,13 @@ func TestExpiringUsers_ReturnsAnEmptyListNotNull(t *testing.T) {
 	w = serve(api, http.MethodGet, "/api/dashboard/admin/jira-account/expiring-users", "")
 	if !strings.Contains(w.Body.String(), "keva.galih@esb.co.id") || !strings.Contains(w.Body.String(), "2026-11-30") {
 		t.Errorf("list = %s", w.Body.String())
+	}
+}
+
+// "No account yet" is data for the page, not an error toast.
+func TestTest_SaysThereIsNoAccountYet(t *testing.T) {
+	w := serve(&fakeAPI{testErr: ErrNotConfigured}, http.MethodPost, "/api/dashboard/admin/jira-account/test", "")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"ok":false`) || !strings.Contains(w.Body.String(), "Belum ada akun Jira") {
+		t.Errorf("response = %d %s", w.Code, w.Body.String())
 	}
 }

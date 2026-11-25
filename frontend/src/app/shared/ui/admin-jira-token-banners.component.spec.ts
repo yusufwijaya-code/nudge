@@ -5,7 +5,8 @@ import { AdminJiraTokenBannersComponent } from './admin-jira-token-banners.compo
 import { JiraAccountService, JiraAccountStatus } from '../../core/services/jira-account.service';
 
 const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-const status = (expiresAt: string): JiraAccountStatus => ({ source: 'env', email: 'yusuf.wijaya@esb.co.id', tokenHint: '••••••••abcd', encryptionReady: true, expiresAt });
+const status = (expiresAt: string): JiraAccountStatus => ({ source: 'database', email: 'yusuf.wijaya@esb.co.id', tokenHint: '••••••••abcd', encryptionReady: true, unreadable: false, expiresAt });
+const none: JiraAccountStatus = { source: 'none', email: '', tokenHint: '', encryptionReady: true, unreadable: false, expiresAt: '' };
 
 describe('AdminJiraTokenBannersComponent', () => {
   let fixture: ComponentFixture<AdminJiraTokenBannersComponent>;
@@ -30,6 +31,15 @@ describe('AdminJiraTokenBannersComponent', () => {
   it('shows nothing when the bot token is fine and no user token is close', () => {
     create(status(day(300)), []);
     expect(el().querySelector('.token-banner')).toBeNull();
+  });
+
+  it('tells the admin loudly when no Jira account is set up at all', () => {
+    create(none, []);
+    const banner = el().querySelector('[data-no-account]') as HTMLElement;
+    expect(banner.textContent).toContain('Belum ada akun Jira');
+    expect(banner.classList).toContain('expired');
+    expect((banner.querySelector('a') as HTMLAnchorElement).getAttribute('href')).toBe('/admin/jira-account');
+    expect(el().querySelector('.token-banner[data-subject="bot"]')).toBeNull();
   });
 
   it('warns about the central account when its token is about to expire', () => {

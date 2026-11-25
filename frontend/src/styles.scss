@@ -2789,6 +2789,8 @@ table.admin-users {
 /* ---------- Date picker (replaces the unstyleable <input type="date"> popup) ---------- */
 .ui-date { position: relative; display: block; min-width: 0; }
 .ui-date-trigger { height: 42px; font-weight: 500; }
+.ui-date-trigger:disabled { opacity: 0.55; cursor: not-allowed; }
+.ui-date-navgroup { display: inline-flex; gap: 2px; }
 .ui-date .ui-select-value.placeholder { color: var(--text-faint); font-weight: 400; }
 .ui-date.open .ui-select-chevron { transform: rotate(180deg); }
 .ui-date-popup {

@@ -308,10 +308,10 @@ func clockLabel(t, now time.Time, layout string) string {
 	return fmt.Sprintf("%s, %d %s %s", weekdayShort[t.Weekday()], t.Day(), monthShort[t.Month()], clock)
 }
 
-// humanDuration renders a second count as H:MM:SS, M:SS or "S detik" (see
-// duration_helper.Clock). The sign is ignored.
+// humanDuration renders a second count in words without its zero units: "1 jam
+// 34 menit 20 detik", "30 menit" (see duration_helper.Format). The sign is ignored.
 func humanDuration(seconds int64) string {
-	return duration_helper.Clock(seconds)
+	return duration_helper.Format(seconds)
 }
 
 // muteLabel describes a running mute.

@@ -13,7 +13,7 @@ export function statusTone(status: string): StatusTone {
   return 'other';
 }
 
-/** H:MM:SS, M:SS or "S detik" (see core/duration-format.ts); the sign is ignored. */
+/** Words without zero units, e.g. "1 jam 34 menit 20 detik" (see core/duration-format.ts); the sign is ignored. */
 export function shortDuration(totalSeconds: number): string {
   return formatDuration(totalSeconds);
 }

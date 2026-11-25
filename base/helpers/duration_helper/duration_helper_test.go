@@ -2,29 +2,28 @@ package duration_helper
 
 import "testing"
 
-func TestClock_ShowsHoursMinutesSecondsThenDropsTheEmptyLeadingUnits(t *testing.T) {
+func TestFormat_WritesWordsAndLeavesOutEveryZeroUnit(t *testing.T) {
 	cases := map[int64]string{
 		0:       "0 detik",
 		7:       "7 detik",
 		52:      "52 detik",
-		59:      "59 detik",
-		60:      "1:00",
-		61:      "1:01",
-		2220:    "37:00",
-		2233:    "37:13",
-		3599:    "59:59",
-		3600:    "1:00:00",
-		3661:    "1:01:01",
-		8948:    "2:29:08",
-		9000:    "2:30:00",
-		163956:  "45:32:36",
-		-8948:   "2:29:08", // the sign is ignored
+		60:      "1 menit",
+		61:      "1 menit 1 detik",
+		1800:    "30 menit",
+		2233:    "37 menit 13 detik",
+		3600:    "1 jam",
+		3630:    "1 jam 30 detik", // a zero minute in the middle is left out too
+		5660:    "1 jam 34 menit 20 detik",
+		8948:    "2 jam 29 menit 8 detik",
+		9000:    "2 jam 30 menit",
+		163956:  "45 jam 32 menit 36 detik",
+		-8948:   "2 jam 29 menit 8 detik", // the sign is ignored
 		-52:     "52 detik",
-		1000000: "277:46:40", // no days: hours just keep counting
+		1000000: "277 jam 46 menit 40 detik", // no days: hours just keep counting
 	}
 	for seconds, want := range cases {
-		if got := Clock(seconds); got != want {
-			t.Errorf("Clock(%d) = %q, want %q", seconds, got, want)
+		if got := Format(seconds); got != want {
+			t.Errorf("Format(%d) = %q, want %q", seconds, got, want)
 		}
 	}
 }

@@ -3,7 +3,9 @@ package poller_service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"nudge/modules/board/board_dto"
+	"nudge/modules/jira_account/jira_account_holder"
 	"testing"
 	"time"
 
@@ -1054,5 +1056,27 @@ func TestPollOnce_NoActiveRuleSkipsTheCycle(t *testing.T) {
 	}
 	if len(issueSession.openAtCalls) != 0 || len(issueSession.closeCalls) != 0 {
 		t.Errorf("opened %v / closed %v, want nothing touched when no rule is active (AC1.4)", issueSession.openAtCalls, issueSession.closeCalls)
+	}
+}
+
+// Without a Jira account (nobody has set one up in Admin > Akun Jira) a cycle
+// does nothing: no Jira call, no session opened, no error spam.
+func TestPollOnce_PausesQuietlyWithoutAJiraAccount(t *testing.T) {
+	prev := jira_account_holder.Override()
+	jira_account_holder.SetOverride(nil)
+	t.Cleanup(func() { jira_account_holder.SetOverride(prev) })
+
+	issueSession := newFakeIssueSessionServiceForPoller()
+	jiraClient := &fakeJiraClientService{issues: []jira_client_dto.Issue{assignedIssue("OMS-1", "dev@esb.co.id", 3)}, searchErr: errors.New("401 must not even be asked")}
+	poller := newTestPoller(jiraClient, issueSession, &fakeReminderEngineService{}, newFakeRegistrationRepositoryForPoller("dev@esb.co.id"))
+
+	if err := poller.pollOnce(context.Background()); err != nil {
+		t.Fatalf("pollOnce must not fail without an account: %v", err)
+	}
+	if err := poller.backfillActiveSessions(context.Background()); err != nil {
+		t.Fatalf("backfillActiveSessions must not fail without an account: %v", err)
+	}
+	if len(issueSession.openAtCalls) != 0 || len(issueSession.closeCalls) != 0 {
+		t.Errorf("nothing may change without an account: opened %v, closed %v", issueSession.openAtCalls, issueSession.closeCalls)
 	}
 }

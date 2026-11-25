@@ -3,7 +3,8 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { JiraAccountCheck, JiraAccountService, JiraAccountStatus } from '../../../core/services/jira-account.service';
 import { ConfirmService } from '../../../core/ui/confirm.service';
-import { expiryDateLabel, expiryDistance, tokenExpiry } from '../../../core/jira-token-expiry';
+import { expiryDateLabel, expiryDistance, expiryMaxDay, tokenExpiry } from '../../../core/jira-token-expiry';
+import { DateRange, DateRangePickerComponent } from '../../../shared/ui/date-range-picker.component';
 import { ToastService } from '../../../core/ui/toast.service';
 import { IconComponent } from '../../../shared/ui/icon.component';
 
@@ -15,7 +16,7 @@ import { IconComponent } from '../../../shared/ui/icon.component';
 @Component({
   selector: 'app-jira-account',
   standalone: true,
-  imports: [FormsModule, DatePipe, IconComponent],
+  imports: [FormsModule, DatePipe, IconComponent, DateRangePickerComponent],
   templateUrl: './jira-account.component.html',
   styleUrl: './jira-account.component.scss',
 })
@@ -61,8 +62,11 @@ export class JiraAccountComponent implements OnInit {
   protected readonly expiryDateLabel = expiryDateLabel;
   protected readonly expiryDistance = expiryDistance;
 
-  protected onExpiryInput(event: Event): void {
-    this.draft = (event.target as HTMLInputElement).value;
+  protected readonly maxDay = expiryMaxDay();
+
+  /** The day picked in the inline editor ("Hapus" gives '' = forget the date). */
+  protected onExpiryPicked(range: DateRange): void {
+    this.draft = range.from;
   }
 
   /** Changes only the expiry day of the token in force (the env token's date is entered here too). */
@@ -89,7 +93,7 @@ export class JiraAccountComponent implements OnInit {
   }
 
   protected get sourceLabel(): string {
-    return this.status?.source === 'database' ? 'Disimpan admin' : 'Dari env server';
+    return this.status?.source === 'database' ? 'Terpasang' : 'Belum diatur';
   }
 
   /** Reloads the account in force and asks Jira who it is. */
@@ -98,7 +102,9 @@ export class JiraAccountComponent implements OnInit {
       next: (status) => {
         this.status = status;
         this.loadError = false;
-        this.runCheck();
+        // Nothing to ask Jira about until an account is set up.
+        if (status.source === 'none') this.check = null;
+        else this.runCheck();
       },
       error: () => (this.loadError = true),
     });
@@ -157,9 +163,9 @@ export class JiraAccountComponent implements OnInit {
 
   protected async onReset(): Promise<void> {
     const confirmed = await this.confirm.ask({
-      title: 'Kembali ke akun env?',
-      message: 'Akun yang disimpan di sini dihapus, bot memakai JIRA_EMAIL / JIRA_API_TOKEN dari server lagi.',
-      confirmText: 'Kembalikan',
+      title: 'Hapus akun Jira?',
+      message: 'Bot berhenti membaca tiket, mengirim reminder, dan menggeser status sampai kamu memasang akun baru.',
+      confirmText: 'Hapus akun',
       tone: 'danger',
       icon: 'trash',
     });
@@ -169,12 +175,12 @@ export class JiraAccountComponent implements OnInit {
     this.api.reset().subscribe({
       next: () => {
         this.resetting = false;
-        this.toast.success('Kembali ke akun env', 'Akun yang disimpan sudah dihapus.');
+        this.toast.success('Akun Jira dihapus', 'Pasang akun baru supaya bot bisa membaca Jira lagi.');
         this.refresh();
       },
       error: () => {
         this.resetting = false;
-        this.toast.error('Gagal mengembalikan', 'Coba lagi sebentar.');
+        this.toast.error('Gagal menghapus akun', 'Coba lagi sebentar.');
       },
     });
   }
