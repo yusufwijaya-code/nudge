@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"nudge/modules/jira_credential/jira_credential_dto"
 	"nudge/modules/chat_app/chat_app_dto"
 	"nudge/modules/chat_delivery"
 	"nudge/modules/google_chat_notifier/google_chat_notifier_dto"
@@ -67,6 +68,15 @@ func (f *fakeJiraCredentialForAdmin) UpsertCredential(ctx context.Context, userI
 func (f *fakeJiraCredentialForAdmin) DeleteCredential(ctx context.Context, userID int64) error {
 	f.deletedUserID = userID
 	return nil
+}
+func (f *fakeJiraCredentialForAdmin) SetExpiry(ctx context.Context, userID int64, expiresAt *time.Time) error {
+	return nil
+}
+func (f *fakeJiraCredentialForAdmin) Expiry(ctx context.Context, userID int64) (*time.Time, error) {
+	return nil, nil
+}
+func (f *fakeJiraCredentialForAdmin) ListExpiring(ctx context.Context, within time.Duration) ([]jira_credential_dto.ExpiringRecord, error) {
+	return nil, nil
 }
 func (f *fakeJiraCredentialForAdmin) MaskedPreview(ctx context.Context, userID int64) (string, bool, error) {
 	preview, ok := f.previewByUserID[userID]

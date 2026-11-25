@@ -135,6 +135,13 @@ type muteRequest struct {
 type saveCredentialRequest struct {
 	JiraEmail string `json:"jiraEmail"`
 	APIToken  string `json:"apiToken"`
+	// ExpiresAt is the day the token expires, "YYYY-MM-DD" (the date Atlassian
+	// shows); empty = unknown. A new token always replaces the old date.
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type saveCredentialExpiryRequest struct {
+	ExpiresAt string `json:"expiresAt"`
 }
 
 // The settings, mute, board-list and credential endpoints act on the
@@ -154,6 +161,9 @@ func (h *userDashboardHandlerImpl) Mute(c *gin.Context)             { h.settings
 func (h *userDashboardHandlerImpl) Unmute(c *gin.Context)           { h.settings.Unmute(c) }
 func (h *userDashboardHandlerImpl) ListBoards(c *gin.Context)       { h.settings.ListBoards(c) }
 func (h *userDashboardHandlerImpl) SaveCredential(c *gin.Context)   { h.settings.SaveCredential(c) }
+func (h *userDashboardHandlerImpl) SaveCredentialExpiry(c *gin.Context) {
+	h.settings.SaveCredentialExpiry(c)
+}
 func (h *userDashboardHandlerImpl) DeleteCredential(c *gin.Context) { h.settings.DeleteCredential(c) }
 
 // BoardAvatar proxies the board's project avatar (AC1.3, AC1.5).

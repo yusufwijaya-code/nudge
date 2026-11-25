@@ -2,8 +2,10 @@ package jira_credential_service
 
 import (
 	"context"
+	"time"
 
 	"nudge/modules/jira_client/jira_client_dto"
+	"nudge/modules/jira_credential/jira_credential_dto"
 )
 
 // JiraCredentialService implements Tech Spec "Dashboard Jira Manage",
@@ -17,6 +19,14 @@ type JiraCredentialService interface {
 	ResolveCredential(ctx context.Context, email string) (*jira_client_dto.Credential, error)
 	UpsertCredential(ctx context.Context, userID int64, jiraEmail, apiToken string) error
 	DeleteCredential(ctx context.Context, userID int64) error
+	// SetExpiry records the day userID's token expires (nil clears it); the
+	// token is opaque, so the user enters the date Atlassian shows.
+	SetExpiry(ctx context.Context, userID int64, expiresAt *time.Time) error
+	// Expiry is the recorded expiry day, nil when unknown or no credential.
+	Expiry(ctx context.Context, userID int64) (*time.Time, error)
+	// ListExpiring returns the personal tokens that expire within `within`
+	// from now (already-expired ones included), soonest first.
+	ListExpiring(ctx context.Context, within time.Duration) ([]jira_credential_dto.ExpiringRecord, error)
 	// MaskedPreview returns a display-safe masked form of userID's token
 	// (e.g. "••••••••aB3f") — the full decrypted token never leaves this
 	// service (spec AC6.4).

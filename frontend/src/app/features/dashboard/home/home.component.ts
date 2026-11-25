@@ -1,6 +1,7 @@
 import { Component, DestroyRef, NgZone, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { formatDuration, formatHours } from '../../../core/duration-format';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   DashboardService,
@@ -34,7 +35,7 @@ export type BudgetLevel = 'ok' | 'warn' | 'over';
 export interface ActiveTicket extends TicketCard {
   percent: number;
   level: BudgetLevel;
-  /** Short "2 jam 35 menit" texts for the meta line (like the DM reminder). */
+  /** Short "2:35:12" texts for the meta line (like the DM reminder). */
   elapsedText: string;
   budgetText: string;
   remainingText: string;
@@ -43,26 +44,14 @@ export interface ActiveTicket extends TicketCard {
   deadlineText: string;
 }
 
-/**
- * From the largest non-zero unit down to the second; the sign is ignored.
- * 9312 → "2 jam 35 menit 12 detik", 900 → "15 menit 0 detik", 0 → "0 detik",
- * 90_000 → "1 hari 1 jam 0 menit 0 detik".
- */
+/** H:MM:SS, M:SS or "S detik" (see core/duration-format.ts); the sign is ignored. */
 export function shortDuration(seconds: number): string {
-  const total = Math.floor(Math.abs(seconds));
-  const days = Math.floor(total / 86400);
-  const hours = Math.floor((total % 86400) / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  if (days > 0) return `${days} hari ${hours} jam ${minutes} menit ${secs} detik`;
-  if (hours > 0) return `${hours} jam ${minutes} menit ${secs} detik`;
-  if (minutes > 0) return `${minutes} menit ${secs} detik`;
-  return `${secs} detik`;
+  return formatDuration(seconds);
 }
 
-/** Decimal hours (sprint report) → the same second-precise text: 2.5 → "2 jam 30 menit 0 detik". */
+/** Decimal hours (sprint report) → the same reading: 2.5 → "2:30:00". */
 export function hoursDuration(hours: number): string {
-  return shortDuration(Math.round(hours * 3600));
+  return formatHours(hours);
 }
 
 const WIB = 'Asia/Jakarta';

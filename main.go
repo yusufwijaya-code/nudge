@@ -190,6 +190,8 @@ func main() {
 
 	jiraCredentialRepo := jira_credential_repository.NewJiraCredentialRepository(db)
 	jiraCredentialSvc := jira_credential_service.NewJiraCredentialService(&cfg, jiraCredentialRepo, registrationRepo)
+	// The admin banner lists users whose personal Jira token is about to expire.
+	jiraAccountSvc.WithExpiringUsers(jiraCredentialSvc)
 
 	userDashboardSvc := user_dashboard_service.NewUserDashboardService(
 		jiraClientSvc, jiraCredentialSvc, registrationRepo, issueSessionRepo, businessHoursSvc, userLeaveSvc, cfg.JiraBaseURL, jiraAgileClient, boardSvc,

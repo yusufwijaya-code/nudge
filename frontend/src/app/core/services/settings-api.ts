@@ -15,7 +15,8 @@ export abstract class SettingsApi {
   abstract resetNotificationSettings(boardId: number): Observable<NotificationSettings>;
   abstract mute(request: MuteRequest, boardId?: number | null): Observable<MuteStatus>;
   abstract unmute(boardId?: number | null): Observable<MuteStatus>;
-  abstract saveCredential(jiraEmail: string, apiToken: string): Observable<{ status: string }>;
+  abstract saveCredential(jiraEmail: string, apiToken: string, expiresAt?: string): Observable<{ status: string }>;
+  abstract saveCredentialExpiry(expiresAt: string): Observable<{ status: string; expiresAt: string }>;
   abstract deleteCredential(): Observable<{ status: string }>;
 }
 

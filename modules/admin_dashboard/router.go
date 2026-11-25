@@ -34,4 +34,5 @@ func Router(actionGroup *gin.RouterGroup, apiGroup *gin.RouterGroup, handler adm
 	apiGroup.POST("/users/:userID/settings/mute", userSettings.Mute)
 	apiGroup.DELETE("/users/:userID/settings/mute", userSettings.Unmute)
 	apiGroup.PUT("/users/:userID/credential", userSettings.SaveCredential)
+	apiGroup.PUT("/users/:userID/credential/expiry", userSettings.SaveCredentialExpiry)
 }

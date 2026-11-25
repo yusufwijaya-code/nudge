@@ -44,8 +44,12 @@ export class AdminUserSettingsApi extends SettingsApi {
     return this.http.delete<MuteStatus>(`${this.base}/settings/mute`, { params: boardParams(boardId) });
   }
 
-  saveCredential(jiraEmail: string, apiToken: string): Observable<{ status: string }> {
-    return this.http.put<{ status: string }>(`${this.base}/credential`, { jiraEmail, apiToken });
+  saveCredential(jiraEmail: string, apiToken: string, expiresAt = ''): Observable<{ status: string }> {
+    return this.http.put<{ status: string }>(`${this.base}/credential`, { jiraEmail, apiToken, expiresAt });
+  }
+
+  saveCredentialExpiry(expiresAt: string): Observable<{ status: string; expiresAt: string }> {
+    return this.http.put<{ status: string; expiresAt: string }>(`${this.base}/credential/expiry`, { expiresAt });
   }
 
   /** The pre-existing admin action (also DMs the user). */

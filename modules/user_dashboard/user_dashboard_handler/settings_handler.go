@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"nudge/modules/jira_credential/jira_credential_dto"
 	"nudge/modules/jira_credential/jira_credential_service"
 	"nudge/modules/user_dashboard/user_dashboard_service"
 	"nudge/modules/user_setting/user_setting_dto"
@@ -145,6 +146,12 @@ func (h *SettingsHandler) GetSettings(c *gin.Context) {
 	}
 
 	credentialMasked, hasCredential, _ := h.jiraCredential.MaskedPreview(ctx, target.UserID)
+	var credentialExpiry string
+	if hasCredential {
+		if expiry, err := h.jiraCredential.Expiry(ctx, target.UserID); err == nil {
+			credentialExpiry = jira_credential_dto.FormatExpiryDate(expiry)
+		}
+	}
 
 	// A failed switch read must not trap the user in the consent pop up:
 	// report "already chosen, on" (the legacy behavior) instead.
@@ -178,6 +185,8 @@ func (h *SettingsHandler) GetSettings(c *gin.Context) {
 		"credential": gin.H{
 			"hasCredential": hasCredential,
 			"maskedPreview": credentialMasked,
+			// "YYYY-MM-DD", "" when unknown: drives the expiry banner.
+			"expiresAt": credentialExpiry,
 		},
 	})
 }
@@ -426,6 +435,12 @@ func (h *SettingsHandler) SaveCredential(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "jiraEmail and apiToken are required"})
 		return
 	}
+	// Checked before anything is stored, so a bad date cannot half-save.
+	expiresAt, err := jira_credential_dto.ParseExpiryDate(req.ExpiresAt, time.Now())
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tanggal kedaluwarsa tidak valid"})
+		return
+	}
 
 	if err := h.jiraCredential.UpsertCredential(c.Request.Context(), target.UserID, req.JiraEmail, req.APIToken); err != nil {
 		if err == jira_credential_service.ErrEncryptionKeyNotConfigured {
@@ -435,8 +450,40 @@ func (h *SettingsHandler) SaveCredential(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save credential"})
 		return
 	}
+	// A new token never inherits the old token's date: set it, or clear it.
+	if err := h.jiraCredential.SetExpiry(c.Request.Context(), target.UserID, expiresAt); err != nil {
+		log.Printf("user_dashboard: saving the token expiry of user %d: %v", target.UserID, err)
+	}
 	h.emit(c, target, SettingsChange{Kind: ChangeCredentialUpdated})
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// SaveCredentialExpiry changes only the expiry day of the saved token, so a
+// user can fill it in later without pasting the token again.
+func (h *SettingsHandler) SaveCredentialExpiry(c *gin.Context) {
+	target, ok := h.resolve(c)
+	if !ok {
+		return
+	}
+	var req saveCredentialExpiryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "expiresAt is required"})
+		return
+	}
+	expiresAt, err := jira_credential_dto.ParseExpiryDate(req.ExpiresAt, time.Now())
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tanggal kedaluwarsa tidak valid"})
+		return
+	}
+	if _, found, _ := h.jiraCredential.MaskedPreview(c.Request.Context(), target.UserID); !found {
+		c.JSON(http.StatusNotFound, gin.H{"error": "belum ada Jira credential"})
+		return
+	}
+	if err := h.jiraCredential.SetExpiry(c.Request.Context(), target.UserID, expiresAt); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save expiry"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "expiresAt": jira_credential_dto.FormatExpiryDate(expiresAt)})
 }
 
 func (h *SettingsHandler) DeleteCredential(c *gin.Context) {

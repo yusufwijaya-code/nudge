@@ -43,7 +43,8 @@ export interface SettingsResponse {
   useDefault: boolean;
   notification: NotificationSettings;
   mute: { global: MuteStatus; board: MuteStatus | null };
-  credential: { hasCredential: boolean; maskedPreview: string };
+  /** expiresAt: day the personal token expires ("YYYY-MM-DD"), "" when unknown. */
+  credential: { hasCredential: boolean; maskedPreview: string; expiresAt?: string };
   /** Master on/off switch (Tech Spec "Notification On-Off Consent"). */
   notifications?: { enabled: boolean; chosen: boolean };
 }
@@ -104,8 +105,13 @@ export class BoardService {
     return this.http.delete<MuteStatus>(`${this.base}/settings/mute`, { params: boardParams(boardId) });
   }
 
-  saveCredential(jiraEmail: string, apiToken: string): Observable<{ status: string }> {
-    return this.http.post<{ status: string }>(`${this.base}/credential`, { jiraEmail, apiToken });
+  saveCredential(jiraEmail: string, apiToken: string, expiresAt = ''): Observable<{ status: string }> {
+    return this.http.post<{ status: string }>(`${this.base}/credential`, { jiraEmail, apiToken, expiresAt });
+  }
+
+  /** Changes only the expiry day of the saved token ("" forgets it). */
+  saveCredentialExpiry(expiresAt: string): Observable<{ status: string; expiresAt: string }> {
+    return this.http.put<{ status: string; expiresAt: string }>(`${this.base}/credential/expiry`, { expiresAt });
   }
 
   deleteCredential(): Observable<{ status: string }> {

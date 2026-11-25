@@ -129,7 +129,7 @@ func TestSendReminder_TierMessageShowsDeadlineAndDHMSBreakdown(t *testing.T) {
 	if !strings.Contains(text, "*Batas Waktu Penyelesaian:* Senin, 26 Okt 2026 15:12:00 WIB") {
 		t.Errorf("message text %q does not contain the expected bold absolute deadline line", text)
 	}
-	if !strings.Contains(text, "*Sisa waktu:* 0 hari 0 jam 54 menit 0 detik") {
+	if !strings.Contains(text, "*Sisa waktu:* 54:00") {
 		t.Errorf("message text %q does not contain the expected bold D/H/M/S remaining breakdown", text)
 	}
 }
@@ -166,7 +166,7 @@ func TestSendReminder_OverageMessageOmitsDeadlineButShowsDHMSBreakdown(t *testin
 	if strings.Contains(text, "Batas Waktu Penyelesaian:") {
 		t.Errorf("overage message text %q must not show an absolute deadline — it has already passed", text)
 	}
-	if !strings.Contains(text, "*Lewat budget selama:* 0 hari 1 jam 21 menit 0 detik") {
+	if !strings.Contains(text, "*Lewat budget selama:* 1:21:00") {
 		t.Errorf("message text %q does not contain the expected bold D/H/M/S overage breakdown", text)
 	}
 }
@@ -236,7 +236,7 @@ func TestBuildMessageText_IncludesStoryPointCalculationExplanation(t *testing.T)
 		BudgetSeconds: 10800,
 	})
 
-	if !strings.Contains(text, "*Story Point:* 3.0 SP (budget 0 hari 3 jam 0 menit 0 detik, dihitung dari 3.0 SP × 1 jam/SP)") {
+	if !strings.Contains(text, "*Story Point:* 3.0 SP (budget 3:00:00, dihitung dari 3.0 SP × 1 jam/SP)") {
 		t.Errorf("message text %q does not explain how the budget was calculated from story points", text)
 	}
 }
@@ -253,10 +253,10 @@ func TestBuildMessageText_ElapsedTimeIsShownToTheSecond(t *testing.T) {
 		ElapsedSeconds: 8948,
 	})
 
-	if !strings.Contains(text, "*Waktu berjalan:* 0 hari 2 jam 29 menit 8 detik") {
+	if !strings.Contains(text, "*Waktu berjalan:* 2:29:08") {
 		t.Errorf("message text %q does not show the elapsed time to the second", text)
 	}
-	if !strings.Contains(text, "*Sisa waktu:* 0 hari 0 jam 0 menit 52 detik") {
+	if !strings.Contains(text, "*Sisa waktu:* 52 detik") {
 		t.Errorf("message text %q does not show the remaining time to the second", text)
 	}
 }

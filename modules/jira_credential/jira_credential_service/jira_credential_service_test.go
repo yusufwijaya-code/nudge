@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"testing"
+	"time"
 
 	"nudge/config"
 	"nudge/modules/jira_credential/jira_credential_dto"
@@ -54,6 +55,26 @@ func (f *fakeJiraCredentialRepo) FindAll(ctx context.Context) ([]jira_credential
 	return out, nil
 }
 
+func (f *fakeJiraCredentialRepo) SetExpiry(ctx context.Context, userID int64, expiresAt *time.Time) error {
+	rec, ok := f.byUserID[userID]
+	if !ok {
+		return nil
+	}
+	rec.ExpiresAt = expiresAt
+	f.byUserID[userID] = rec
+	return nil
+}
+
+func (f *fakeJiraCredentialRepo) ListExpiringBefore(ctx context.Context, cutoff time.Time) ([]jira_credential_dto.ExpiringRecord, error) {
+	var out []jira_credential_dto.ExpiringRecord
+	for _, rec := range f.byUserID {
+		if rec.ExpiresAt != nil && rec.ExpiresAt.Before(cutoff) {
+			out = append(out, jira_credential_dto.ExpiringRecord{UserID: rec.UserID, Email: rec.JiraEmail, ExpiresAt: *rec.ExpiresAt})
+		}
+	}
+	return out, nil
+}
+
 type fakeRegistrationRepoForCredential struct {
 	usersByEmail map[string]registration_dto.User
 }
@@ -74,7 +95,6 @@ func (f *fakeRegistrationRepoForCredential) FindUserByJiraAccountID(ctx context.
 func (f *fakeRegistrationRepoForCredential) UpdateGoogleChatDMSpaceID(ctx context.Context, email, spaceID string) error {
 	return nil
 }
-
 
 func (f *fakeRegistrationRepoForCredential) FindAll(ctx context.Context) ([]registration_dto.User, error) {
 	return nil, nil
@@ -220,5 +240,44 @@ func TestParseKey_RejectsWrongLength(t *testing.T) {
 	shortKey := base64.StdEncoding.EncodeToString([]byte("too-short"))
 	if _, ok := parseKey(shortKey); ok {
 		t.Error("parseKey accepted a non-32-byte key, want ok=false")
+	}
+}
+
+func TestExpiry_IsSetReadAndClearedPerUserAndListedWhenClose(t *testing.T) {
+	repo := &fakeJiraCredentialRepo{byUserID: map[int64]jira_credential_dto.Record{
+		1: {UserID: 1, JiraEmail: "a@esb.co.id", FlagActive: true},
+		2: {UserID: 2, JiraEmail: "b@esb.co.id", FlagActive: true},
+	}}
+	svc := NewJiraCredentialService(&config.AppConfig{}, repo, &fakeRegistrationRepoForCredential{})
+	ctx := context.Background()
+
+	if day, err := svc.Expiry(ctx, 1); err != nil || day != nil {
+		t.Fatalf("before: Expiry = %v, %v; want unknown", day, err)
+	}
+	soon := time.Now().Add(5 * 24 * time.Hour)
+	later := time.Now().Add(200 * 24 * time.Hour)
+	if err := svc.SetExpiry(ctx, 1, &soon); err != nil {
+		t.Fatalf("SetExpiry: %v", err)
+	}
+	if err := svc.SetExpiry(ctx, 2, &later); err != nil {
+		t.Fatalf("SetExpiry: %v", err)
+	}
+	if day, _ := svc.Expiry(ctx, 1); day == nil || !day.Equal(soon) {
+		t.Errorf("Expiry(1) = %v, want %v", day, soon)
+	}
+
+	close, err := svc.ListExpiring(ctx, 14*24*time.Hour)
+	if err != nil || len(close) != 1 || close[0].UserID != 1 {
+		t.Errorf("ListExpiring(14 days) = %+v, %v; want only user 1", close, err)
+	}
+
+	if err := svc.SetExpiry(ctx, 1, nil); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if day, _ := svc.Expiry(ctx, 1); day != nil {
+		t.Errorf("Expiry(1) after clearing = %v", day)
+	}
+	if day, err := svc.Expiry(ctx, 99); err != nil || day != nil {
+		t.Errorf("Expiry of a user without a credential = %v, %v; want nil", day, err)
 	}
 }

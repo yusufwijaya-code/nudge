@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"nudge/base/helpers/duration_helper"
 	"nudge/modules/user_setting/user_setting_dto"
 )
 
@@ -307,23 +308,10 @@ func clockLabel(t, now time.Time, layout string) string {
 	return fmt.Sprintf("%s, %d %s %s", weekdayShort[t.Weekday()], t.Day(), monthShort[t.Month()], clock)
 }
 
-// humanDuration renders a second count from its largest non-zero unit down to
-// the second: "2 jam 10 menit 5 detik", "45 menit 0 detik", "1 hari 3 jam 0
-// menit 12 detik", "0 detik". The sign is ignored.
+// humanDuration renders a second count as H:MM:SS, M:SS or "S detik" (see
+// duration_helper.Clock). The sign is ignored.
 func humanDuration(seconds int64) string {
-	if seconds < 0 {
-		seconds = -seconds
-	}
-	d, h, m, s := seconds/86400, (seconds%86400)/3600, (seconds%3600)/60, seconds%60
-	switch {
-	case d > 0:
-		return fmt.Sprintf("%d hari %d jam %d menit %d detik", d, h, m, s)
-	case h > 0:
-		return fmt.Sprintf("%d jam %d menit %d detik", h, m, s)
-	case m > 0:
-		return fmt.Sprintf("%d menit %d detik", m, s)
-	}
-	return fmt.Sprintf("%d detik", s)
+	return duration_helper.Clock(seconds)
 }
 
 // muteLabel describes a running mute.

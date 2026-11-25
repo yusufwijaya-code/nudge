@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { BehaviorSubject } from 'rxjs';
 import { AdminShellComponent } from './admin-shell.component';
 import { AuthService } from '../../core/services/auth.service';
@@ -13,6 +15,8 @@ describe('AdminShellComponent', () => {
       imports: [AdminShellComponent],
       providers: [
         provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: AuthService, useValue: { currentUser$: new BehaviorSubject({ email: 'admin@esb.co.id', isAdmin: true }) } },
       ],
     }).compileComponents();

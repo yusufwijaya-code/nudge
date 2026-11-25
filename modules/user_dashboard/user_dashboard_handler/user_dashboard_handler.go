@@ -36,5 +36,6 @@ type UserDashboardHandler interface {
 	// GetMoveRequirements: the fields a move still needs (?transitionId=).
 	GetMoveRequirements(c *gin.Context)
 	SaveCredential(c *gin.Context)
+	SaveCredentialExpiry(c *gin.Context)
 	DeleteCredential(c *gin.Context)
 }

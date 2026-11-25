@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { JiraAccountCheck, JiraAccountService, JiraAccountStatus } from '../../../core/services/jira-account.service';
 import { ConfirmService } from '../../../core/ui/confirm.service';
+import { expiryDateLabel, expiryDistance, tokenExpiry } from '../../../core/jira-token-expiry';
 import { ToastService } from '../../../core/ui/toast.service';
 import { IconComponent } from '../../../shared/ui/icon.component';
 
@@ -31,6 +32,11 @@ export class JiraAccountComponent implements OnInit {
 
   protected email = '';
   protected token = '';
+  /** Day the new token expires ("YYYY-MM-DD"): required with a new token, so the banner can warn. */
+  protected newExpiresAt = '';
+  /** The date typed in the inline editor; null until typed, so it starts from the saved one. */
+  protected draft: string | null = null;
+  protected savingExpiry = false;
   protected showToken = false;
   protected saving = false;
   protected resetting = false;
@@ -41,7 +47,40 @@ export class JiraAccountComponent implements OnInit {
   }
 
   protected get canSave(): boolean {
-    return !!this.status?.encryptionReady && this.email.trim().includes('@') && this.token.trim().length > 0 && !this.saving;
+    return !!this.status?.encryptionReady && this.email.trim().includes('@') && this.token.trim().length > 0 && !!this.newExpiresAt && !this.saving;
+  }
+
+  protected get expiry() {
+    return tokenExpiry(this.status?.expiresAt);
+  }
+
+  protected get expiryValue(): string {
+    return this.draft ?? this.status?.expiresAt ?? '';
+  }
+
+  protected readonly expiryDateLabel = expiryDateLabel;
+  protected readonly expiryDistance = expiryDistance;
+
+  protected onExpiryInput(event: Event): void {
+    this.draft = (event.target as HTMLInputElement).value;
+  }
+
+  /** Changes only the expiry day of the token in force (the env token's date is entered here too). */
+  protected onSaveExpiry(): void {
+    if (this.savingExpiry) return;
+    this.savingExpiry = true;
+    this.api.setExpiry(this.expiryValue).subscribe({
+      next: () => {
+        this.savingExpiry = false;
+        this.draft = null;
+        this.toast.success('Tanggal tersimpan', this.expiryValue ? 'Nudge akan mengingatkan sebelum token habis.' : 'Tanggal kedaluwarsa dihapus.');
+        this.refresh();
+      },
+      error: (err) => {
+        this.savingExpiry = false;
+        this.toast.error('Gagal menyimpan tanggal', err?.status === 400 ? 'Tanggal kedaluwarsa tidak valid.' : 'Coba lagi sebentar.');
+      },
+    });
   }
 
   /** No encryption key on the server: nothing can be saved. */
@@ -98,12 +137,14 @@ export class JiraAccountComponent implements OnInit {
 
     this.saving = true;
     this.error = null;
-    this.api.save(this.email.trim(), this.token.trim()).subscribe({
+    this.api.save(this.email.trim(), this.token.trim(), this.newExpiresAt).subscribe({
       next: (res) => {
         this.saving = false;
         this.token = '';
         this.showToken = false;
         this.email = '';
+        this.newExpiresAt = '';
+        this.draft = null;
         this.toast.success('Akun Jira diganti', `Bot sekarang bertindak sebagai ${res.account.displayName}.`);
         this.refresh();
       },

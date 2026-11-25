@@ -9,6 +9,7 @@ import (
 
 	"nudge/base/helpers/curl_helper"
 	"nudge/config"
+	"nudge/base/helpers/duration_helper"
 	"nudge/modules/google_chat_notifier/google_chat_notifier_dto"
 )
 
@@ -113,18 +114,12 @@ func BuildMessageText(msg google_chat_notifier_dto.ReminderMessage) string {
 	return strings.Join(lines, "\n")
 }
 
-// FormatDuration renders a second count as "D hari H jam M menit S detik" —
-// used for both the pre-deadline countdown and the overage amount, so both
-// read in the same unit instead of a vague decimal-hours figure.
+// FormatDuration renders a second count as H:MM:SS (M:SS under an hour, "S
+// detik" under a minute): used for the pre-deadline countdown, the overage
+// amount, the elapsed time and the budget, so all read the same way instead of
+// a vague decimal-hours figure. See duration_helper.Clock.
 func FormatDuration(totalSeconds int64) string {
-	if totalSeconds < 0 {
-		totalSeconds = -totalSeconds
-	}
-	days := totalSeconds / 86400
-	hours := (totalSeconds % 86400) / 3600
-	minutes := (totalSeconds % 3600) / 60
-	seconds := totalSeconds % 60
-	return fmt.Sprintf("%d hari %d jam %d menit %d detik", days, hours, minutes, seconds)
+	return duration_helper.Clock(totalSeconds)
 }
 
 var indonesianWeekdays = map[time.Weekday]string{

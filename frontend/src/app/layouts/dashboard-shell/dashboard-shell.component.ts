@@ -14,6 +14,7 @@ import { TopbarHeightDirective } from '../../shared/ui/topbar-height.directive';
 import { scrollTopOnPageChange } from '../../shared/ui/scroll-top-on-page-change';
 import { UserAvatarComponent, myAvatarUrl } from '../../shared/ui/user-avatar.component';
 import { ChatAppBannerComponent } from '../../shared/ui/chat-app-banner.component';
+import { MyJiraTokenBannerComponent } from '../../shared/ui/my-jira-token-banner.component';
 import { environment } from '../../../environments/environment';
 
 interface PageHeading {
@@ -24,7 +25,7 @@ interface PageHeading {
 @Component({
   selector: 'app-dashboard-shell',
   standalone: true,
-  imports: [TopbarHeightDirective, RouterOutlet, RouterLink, RouterLinkActive, AsyncPipe, NgIf, IconComponent, UserAvatarComponent, BoardAvatarComponent, NotificationConsentComponent, ChatAppBannerComponent],
+  imports: [TopbarHeightDirective, RouterOutlet, RouterLink, RouterLinkActive, AsyncPipe, NgIf, IconComponent, UserAvatarComponent, BoardAvatarComponent, NotificationConsentComponent, ChatAppBannerComponent, MyJiraTokenBannerComponent],
   templateUrl: './dashboard-shell.component.html',
 })
 export class DashboardShellComponent implements OnInit {

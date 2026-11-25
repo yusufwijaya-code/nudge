@@ -26,5 +26,6 @@ func Router(api *gin.RouterGroup, handler user_dashboard_handler.UserDashboardHa
 	api.GET("/tickets/:issueKey/move-requirements", handler.GetMoveRequirements)
 	api.POST("/tickets/:issueKey/transition", handler.TransitionTicket)
 	api.POST("/credential", handler.SaveCredential)
+	api.PUT("/credential/expiry", handler.SaveCredentialExpiry)
 	api.DELETE("/credential", handler.DeleteCredential)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"nudge/modules/jira_credential/jira_credential_dto"
 	"nudge/modules/board/board_dto"
 	"reflect"
 	"sort"
@@ -93,6 +94,15 @@ func (f *fakeJiraCredentialForDashboard) UpsertCredential(ctx context.Context, u
 }
 func (f *fakeJiraCredentialForDashboard) DeleteCredential(ctx context.Context, userID int64) error {
 	return nil
+}
+func (f *fakeJiraCredentialForDashboard) SetExpiry(ctx context.Context, userID int64, expiresAt *time.Time) error {
+	return nil
+}
+func (f *fakeJiraCredentialForDashboard) Expiry(ctx context.Context, userID int64) (*time.Time, error) {
+	return nil, nil
+}
+func (f *fakeJiraCredentialForDashboard) ListExpiring(ctx context.Context, within time.Duration) ([]jira_credential_dto.ExpiringRecord, error) {
+	return nil, nil
 }
 func (f *fakeJiraCredentialForDashboard) MaskedPreview(ctx context.Context, userID int64) (string, bool, error) {
 	return "", false, nil
