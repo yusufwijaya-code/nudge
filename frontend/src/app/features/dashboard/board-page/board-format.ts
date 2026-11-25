@@ -12,13 +12,18 @@ export function statusTone(status: string): StatusTone {
   return 'other';
 }
 
-/** 5400 → "1j 30m", 2700 → "45m", 7200 → "2j", 20 → "0m". */
+/**
+ * From the largest non-zero unit down to the second; the sign is ignored.
+ * 5415 → "1j 30m 15dtk", 2700 → "45m 0dtk", 7200 → "2j 0m 0dtk", 20 → "20dtk".
+ */
 export function shortDuration(totalSeconds: number): string {
-  const minutes = Math.floor(Math.abs(totalSeconds) / 60);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m}m`;
-  return m === 0 ? `${h}j` : `${h}j ${m}m`;
+  const total = Math.floor(Math.abs(totalSeconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}j ${m}m ${s}dtk`;
+  if (m > 0) return `${m}m ${s}dtk`;
+  return `${s}dtk`;
 }
 
 /** Elapsed share of the budget, capped at 100 (0 when there is no budget). */

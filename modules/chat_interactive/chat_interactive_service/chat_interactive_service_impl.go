@@ -361,7 +361,7 @@ func spLabel(sp float64) string {
 func budgetLine(c user_dashboard_dto.Card, now time.Time) string {
 	deadline := ""
 	if t, err := time.Parse(time.RFC3339, c.DeadlineAt); err == nil {
-		deadline = whenLabel(t, now) + " WIB"
+		deadline = deadlineLabel(t, now) + " WIB"
 	}
 	switch {
 	case c.HasBudgetDetail && overdue(c):
@@ -467,7 +467,7 @@ func (s *service) ticketDetail(ctx context.Context, email, key, target string) v
 			info = append(info, "*Sisa waktu:* "+humanDuration(remaining(card)))
 		}
 		if t, err := time.Parse(time.RFC3339, card.DeadlineAt); err == nil {
-			info = append(info, "*Harus selesai:* "+whenLabel(t, now)+" WIB")
+			info = append(info, "*Batas Waktu Penyelesaian:* "+deadlineLabel(t, now)+" WIB")
 		}
 	} else if card.TimeRecorded {
 		info = append(info, "*Waktu tercatat:* "+humanDuration(card.ElapsedSeconds))

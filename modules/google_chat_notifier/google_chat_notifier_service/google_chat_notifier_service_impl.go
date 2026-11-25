@@ -75,8 +75,6 @@ func BuildMessageText(msg google_chat_notifier_dto.ReminderMessage) string {
 	if msg.Text != "" {
 		return msg.Text
 	}
-	budgetHours := float64(msg.BudgetSeconds) / 3600
-	elapsedHours := float64(msg.ElapsedSeconds) / 3600
 	remainingSeconds := msg.BudgetSeconds - msg.ElapsedSeconds
 
 	lines := []string{
@@ -91,8 +89,8 @@ func BuildMessageText(msg google_chat_notifier_dto.ReminderMessage) string {
 		lines = append(lines, "*Status:* CODE REVIEW (waktu review tetap dihitung)")
 	}
 	lines = append(lines,
-		fmt.Sprintf("*Story Point:* %.1f SP (budget %.1f jam, dihitung dari %.1f SP × 1 jam/SP)", msg.StoryPoints, budgetHours, msg.StoryPoints),
-		fmt.Sprintf("*Waktu berjalan:* %.1f jam", elapsedHours),
+		fmt.Sprintf("*Story Point:* %.1f SP (budget %s, dihitung dari %.1f SP × 1 jam/SP)", msg.StoryPoints, FormatDuration(msg.BudgetSeconds), msg.StoryPoints),
+		fmt.Sprintf("*Waktu berjalan:* %s", FormatDuration(msg.ElapsedSeconds)),
 	)
 
 	switch {
@@ -105,7 +103,7 @@ func BuildMessageText(msg google_chat_notifier_dto.ReminderMessage) string {
 	default:
 		lines = append(lines,
 			fmt.Sprintf("*Sisa waktu:* %s", FormatDuration(remainingSeconds)),
-			fmt.Sprintf("*Harus Selesai Pass:* %s", FormatDeadline(msg.Deadline)),
+			fmt.Sprintf("*Batas Waktu Penyelesaian:* %s", FormatDeadline(msg.Deadline)),
 		)
 	}
 

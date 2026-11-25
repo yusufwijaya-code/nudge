@@ -288,10 +288,16 @@ func dayLabel(t time.Time) string {
 }
 
 // whenLabel: "15:30" today, "besok 08:30", or "Jum, 20 Nov 08:30".
-func whenLabel(t, now time.Time) string {
+func whenLabel(t, now time.Time) string { return clockLabel(t, now, "15:04") }
+
+// deadlineLabel is whenLabel down to the second ("15:30:12"): a budget
+// deadline is computed to the second, so it is shown that way.
+func deadlineLabel(t, now time.Time) string { return clockLabel(t, now, "15:04:05") }
+
+func clockLabel(t, now time.Time, layout string) string {
 	t, base := t.In(wib), today(now)
 	day := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, wib)
-	clock := t.Format("15:04")
+	clock := t.Format(layout)
 	switch {
 	case day.Equal(base):
 		return clock
@@ -301,26 +307,23 @@ func whenLabel(t, now time.Time) string {
 	return fmt.Sprintf("%s, %d %s %s", weekdayShort[t.Weekday()], t.Day(), monthShort[t.Month()], clock)
 }
 
-// humanDuration: "2 jam 10 menit", "45 menit", "1 hari 3 jam".
+// humanDuration renders a second count from its largest non-zero unit down to
+// the second: "2 jam 10 menit 5 detik", "45 menit 0 detik", "1 hari 3 jam 0
+// menit 12 detik", "0 detik". The sign is ignored.
 func humanDuration(seconds int64) string {
 	if seconds < 0 {
 		seconds = -seconds
 	}
-	d, h, m := seconds/86400, (seconds%86400)/3600, (seconds%3600)/60
-	var parts []string
-	if d > 0 {
-		parts = append(parts, fmt.Sprintf("%d hari", d))
+	d, h, m, s := seconds/86400, (seconds%86400)/3600, (seconds%3600)/60, seconds%60
+	switch {
+	case d > 0:
+		return fmt.Sprintf("%d hari %d jam %d menit %d detik", d, h, m, s)
+	case h > 0:
+		return fmt.Sprintf("%d jam %d menit %d detik", h, m, s)
+	case m > 0:
+		return fmt.Sprintf("%d menit %d detik", m, s)
 	}
-	if h > 0 {
-		parts = append(parts, fmt.Sprintf("%d jam", h))
-	}
-	if m > 0 && d == 0 {
-		parts = append(parts, fmt.Sprintf("%d menit", m))
-	}
-	if len(parts) == 0 {
-		return "< 1 menit"
-	}
-	return strings.Join(parts, " ")
+	return fmt.Sprintf("%d detik", s)
 }
 
 // muteLabel describes a running mute.
