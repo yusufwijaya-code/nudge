@@ -492,7 +492,64 @@ input:checked + .check-box {
   }
 }
 
-.sidebar-footer { margin-top: auto; }
+.sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+
+// Way back to the user's own dashboard, pinned at the bottom of the admin sidebar.
+.sidebar-home {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  color: #fff;
+  background: var(--gradient);
+  box-shadow: 0 8px 20px rgba(91, 76, 240, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+  transition: transform var(--normal) var(--ease), box-shadow var(--normal) var(--ease), filter var(--normal) var(--ease);
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -40%; right: -20%;
+    width: 90px; height: 90px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    pointer-events: none;
+  }
+
+  .sidebar-home-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    transition: transform var(--normal) var(--ease-spring);
+  }
+
+  .sidebar-home-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+
+    strong { font-size: 0.9rem; font-weight: 700; }
+    small { font-size: 0.72rem; color: rgba(255, 255, 255, 0.78); }
+  }
+
+  .sidebar-home-go { margin-left: auto; flex: none; opacity: 0.8; transition: transform var(--normal) var(--ease); }
+
+  &:hover {
+    color: #fff;
+    transform: translateY(-2px);
+    filter: brightness(1.06);
+    box-shadow: 0 12px 28px rgba(91, 76, 240, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+  &:hover .sidebar-home-icon { transform: translateX(-3px); }
+  &:hover .sidebar-home-go { transform: translateX(3px); }
+  &:active { transform: translateY(0); }
+}
 
 .sidebar-tip {
   display: flex;
@@ -567,7 +624,6 @@ input:checked + .check-box {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.btn-home { white-space: nowrap; }
 .back-link {
   display: inline-flex;
   align-items: center;
@@ -668,10 +724,6 @@ tr.clickable:hover td { background: var(--surface-2); }
   font-size: 0.82rem;
   font-weight: 600;
 }
-@media (max-width: 640px) {
-  .btn-home span { display: none; }
-}
-
 .sidebar-toggle { display: none; }
 
 .page {

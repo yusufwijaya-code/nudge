@@ -30,6 +30,10 @@ func (f *fakeIssueSessionRepository) UpdateStoryPoints(ctx context.Context, issu
 	return f.err
 }
 
+func (f *fakeIssueSessionRepository) SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
+	return nil
+}
+
 func (f *fakeIssueSessionRepository) CloseSession(ctx context.Context, issueKey string, additionalSeconds int64) error {
 	return f.err
 }

@@ -74,6 +74,19 @@ func (s *jiraClientServiceImpl) GetTrackedRunTimes(ctx context.Context, issueKey
 	return runStart, lastEntry, found, nil
 }
 
+func (s *jiraClientServiceImpl) GetClosedRunSeconds(ctx context.Context, issueKey string, elapsed func(start, end time.Time) int64) (int64, error) {
+	reqURL := fmt.Sprintf("%s/rest/api/3/issue/%s?expand=changelog", s.cfg.JiraBaseURL, issueKey)
+
+	result, err := curl_helper.CurlRequest[jira_client_dto.ChangelogResponse](
+		ctx, reqURL, s.authHeaders(), nil, http.MethodGet, 10000, true,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("jira_client: GetClosedRunSeconds(%s) failed: %w", issueKey, err)
+	}
+	seconds, _ := jira_client_dto.TrackedSeconds(result.Changelog.Histories, jira_client_dto.RuleForIssue(issueKey), elapsed)
+	return seconds, nil
+}
+
 // LookupUserByEmail reports whether a Jira account matches email, and that
 // account's accountId. The Jira Cloud user-search endpoint already matches
 // `query` against email server-side, but privacy settings can make it

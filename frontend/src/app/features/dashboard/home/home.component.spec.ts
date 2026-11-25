@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { BehaviorSubject, of, throwError } from 'rxjs';
-import { HomeComponent, budgetLevel, budgetPercent, firstName, shortDuration, sprintRange, toTree, whenLabel, withBudget } from './home.component';
+import { HomeComponent, budgetLevel, budgetPercent, firstName, hoursDuration, shortDuration, sprintRange, toTree, whenLabel, withBudget } from './home.component';
 import { DashboardService, TicketCard } from '../../../core/services/dashboard.service';
 import { BoardContextService, BoardSummary } from '../../../core/services/board-context.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -108,19 +108,34 @@ describe('dashboard helpers', () => {
   });
 
   it('formats short durations', () => {
-    expect(shortDuration(9300)).toBe('2 jam 35 menit');
-    expect(shortDuration(-900)).toBe('15 menit');
-    expect(shortDuration(3600)).toBe('1 jam');
-    expect(shortDuration(90_000)).toBe('1 hari 1 jam');
-    expect(shortDuration(30)).toBe('0 menit');
+    expect(shortDuration(9312)).toBe('2 jam 35 menit 12 detik');
+    expect(shortDuration(9300)).toBe('2 jam 35 menit 0 detik');
+    expect(shortDuration(-900)).toBe('15 menit 0 detik');
+    expect(shortDuration(3600)).toBe('1 jam 0 menit 0 detik');
+    expect(shortDuration(90_000)).toBe('1 hari 1 jam 0 menit 0 detik');
+    expect(shortDuration(30)).toBe('30 detik');
+    expect(shortDuration(0)).toBe('0 detik');
+    // PL-11859: 2.5 jam used to hide that only 52 seconds were left.
+    expect(shortDuration(9000 - 8948)).toBe('52 detik');
+  });
+
+  it('formats sprint-report hours down to the second', () => {
+    expect(hoursDuration(2.5)).toBe('2 jam 30 menit 0 detik');
+    expect(hoursDuration(2 + 29 / 60 + 8 / 3600)).toBe('2 jam 29 menit 8 detik');
+    expect(hoursDuration(0)).toBe('0 detik');
+  });
+
+  it('keeps the seconds of an instant that is not on a whole minute', () => {
+    const now = new Date('2026-11-25T03:00:00Z');
+    expect(whenLabel('2026-11-25T04:17:26Z', now)).toBe('Hari ini 11:17:26');
   });
 
   it('formats an instant relative to today in WIB', () => {
     const now = new Date('2026-11-14T03:00:00Z'); // Sab, 14 Nov 10:00 WIB
-    expect(whenLabel('2026-11-14T09:05:00Z', now)).toBe('Hari ini 16:05');
-    expect(whenLabel('2026-11-15T01:30:00Z', now)).toBe('Besok 08:30');
-    expect(whenLabel('2026-11-13T02:10:00Z', now)).toBe('Kemarin 09:10');
-    expect(whenLabel('2026-11-17T04:00:00Z', now)).toMatch(/^Sel, 17 Nov 11:00$/);
+    expect(whenLabel('2026-11-14T09:05:00Z', now)).toBe('Hari ini 16:05:00');
+    expect(whenLabel('2026-11-15T01:30:00Z', now)).toBe('Besok 08:30:00');
+    expect(whenLabel('2026-11-13T02:10:00Z', now)).toBe('Kemarin 09:10:00');
+    expect(whenLabel('2026-11-17T04:00:00Z', now)).toMatch(/^Sel, 17 Nov 11:00:00$/);
     expect(whenLabel(undefined, now)).toBe('');
   });
 
@@ -275,10 +290,10 @@ describe('HomeComponent', () => {
   it('shows elapsed vs budget, remaining and deadline like the DM reminder', () => {
     const [over, ok] = Array.from(el().querySelectorAll('[data-card="active"] .ticket-row'));
     const meta = (row: Element, key: string) => row.querySelector(`[data-meta="${key}"]`)?.textContent?.replace(/\s+/g, ' ').trim();
-    expect(meta(ok, 'elapsed')).toBe('Berjalan 30 menit dari 1 jam (1 SP)');
-    expect(meta(ok, 'remaining')).toBe('Sisa 30 menit');
-    expect(meta(over, 'elapsed')).toBe('Berjalan 1 jam 15 menit dari 1 jam (1 SP)');
-    expect(meta(over, 'remaining')).toBe('Lewat 15 menit');
+    expect(meta(ok, 'elapsed')).toBe('Berjalan 30 menit 0 detik dari 1 jam 0 menit 0 detik (1 SP)');
+    expect(meta(ok, 'remaining')).toBe('Sisa 30 menit 0 detik');
+    expect(meta(over, 'elapsed')).toBe('Berjalan 1 jam 15 menit 0 detik dari 1 jam 0 menit 0 detik (1 SP)');
+    expect(meta(over, 'remaining')).toBe('Lewat 15 menit 0 detik');
     expect(meta(over, 'deadline')).toBeUndefined();
   });
 
@@ -398,6 +413,13 @@ describe('HomeComponent', () => {
     fixture.detectChanges();
 
     expect(el().querySelector('[data-card="active"] .empty-inline')?.textContent).toContain('Tidak ada tiket di Code Process');
+  });
+
+  it('shows a ticket count on the "Sedang dikerjakan" and "Sedang di-review" cards like "Akan dikerjakan"', () => {
+    expect(el().querySelector('[data-active-count]')?.textContent?.trim()).toBe('3');
+    expect(el().querySelector('[data-review-count]')?.textContent?.trim()).toBe('2');
+    expect(el().querySelector('[data-card="active"] .card-header .count-pill')).not.toBeNull();
+    expect(el().querySelector('[data-card="review"] .card-header .count-pill')).not.toBeNull();
   });
 
   describe('Sedang di-review (projects that count review time)', () => {
@@ -556,7 +578,7 @@ describe('HomeComponent', () => {
       expect(rows.map((r) => r.querySelector('.ticket-key')?.textContent?.trim())).toEqual(['OMS-2', 'OMS-1']);
       expect((rows[0].querySelector('a.ticket-key') as HTMLAnchorElement).href).toBe('https://jira/browse/OMS-2');
       expect(rows[0].querySelector('.dev-badge')?.textContent?.trim()).toBe('+100%');
-      expect(rows[0].textContent).toContain('4 dari 2 jam');
+      expect(rows[0].textContent).toContain('4 jam 0 menit 0 detik dari 2 jam 0 menit 0 detik');
       expect(rows[1].querySelector('.dev-badge')?.textContent?.trim()).toBe('0%');
     });
 

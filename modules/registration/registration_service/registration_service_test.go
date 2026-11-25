@@ -26,6 +26,10 @@ func (f *fakeJiraClientServiceForRegistration) GetLatestCodeProcessEntryTime(ctx
 	return time.Time{}, false, nil
 }
 
+func (f *fakeJiraClientServiceForRegistration) GetClosedRunSeconds(ctx context.Context, issueKey string, elapsed func(start, end time.Time) int64) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeJiraClientServiceForRegistration) GetTrackedRunTimes(ctx context.Context, issueKey string) (time.Time, time.Time, bool, error) {
 	t, found, err := f.GetLatestCodeProcessEntryTime(ctx, issueKey)
 	return t, t, found, err

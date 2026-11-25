@@ -126,7 +126,7 @@ func TestSendReminder_TierMessageShowsDeadlineAndDHMSBreakdown(t *testing.T) {
 	}
 
 	text := gotBody["text"]
-	if !strings.Contains(text, "*Harus Selesai Pass:* Senin, 26 Okt 2026 15:12:00 WIB") {
+	if !strings.Contains(text, "*Batas Waktu Penyelesaian:* Senin, 26 Okt 2026 15:12:00 WIB") {
 		t.Errorf("message text %q does not contain the expected bold absolute deadline line", text)
 	}
 	if !strings.Contains(text, "*Sisa waktu:* 0 hari 0 jam 54 menit 0 detik") {
@@ -163,7 +163,7 @@ func TestSendReminder_OverageMessageOmitsDeadlineButShowsDHMSBreakdown(t *testin
 	}
 
 	text := gotBody["text"]
-	if strings.Contains(text, "Harus Selesai Pass:") {
+	if strings.Contains(text, "Batas Waktu Penyelesaian:") {
 		t.Errorf("overage message text %q must not show an absolute deadline — it has already passed", text)
 	}
 	if !strings.Contains(text, "*Lewat budget selama:* 0 hari 1 jam 21 menit 0 detik") {
@@ -236,8 +236,28 @@ func TestBuildMessageText_IncludesStoryPointCalculationExplanation(t *testing.T)
 		BudgetSeconds: 10800,
 	})
 
-	if !strings.Contains(text, "*Story Point:* 3.0 SP (budget 3.0 jam, dihitung dari 3.0 SP × 1 jam/SP)") {
+	if !strings.Contains(text, "*Story Point:* 3.0 SP (budget 0 hari 3 jam 0 menit 0 detik, dihitung dari 3.0 SP × 1 jam/SP)") {
 		t.Errorf("message text %q does not explain how the budget was calculated from story points", text)
+	}
+}
+
+// "Waktu berjalan" is shown down to the second, not as a rounded decimal-hours
+// figure (PL-11859: 2.5 jam hid a 52-second margin).
+func TestBuildMessageText_ElapsedTimeIsShownToTheSecond(t *testing.T) {
+	text := BuildMessageText(google_chat_notifier_dto.ReminderMessage{
+		IssueKey:       "PL-11859",
+		AssigneeName:   "Keva",
+		Tier:           "1m",
+		StoryPoints:    2.5,
+		BudgetSeconds:  9000,
+		ElapsedSeconds: 8948,
+	})
+
+	if !strings.Contains(text, "*Waktu berjalan:* 0 hari 2 jam 29 menit 8 detik") {
+		t.Errorf("message text %q does not show the elapsed time to the second", text)
+	}
+	if !strings.Contains(text, "*Sisa waktu:* 0 hari 0 jam 0 menit 52 detik") {
+		t.Errorf("message text %q does not show the remaining time to the second", text)
 	}
 }
 

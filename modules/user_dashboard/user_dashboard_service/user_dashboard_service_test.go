@@ -47,6 +47,10 @@ func (f *fakeJiraClientForDashboard) GetLatestCodeProcessEntryTime(ctx context.C
 	return time.Time{}, false, nil
 }
 
+func (f *fakeJiraClientForDashboard) GetClosedRunSeconds(ctx context.Context, issueKey string, elapsed func(start, end time.Time) int64) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeJiraClientForDashboard) GetTrackedRunTimes(ctx context.Context, issueKey string) (time.Time, time.Time, bool, error) {
 	t, found, err := f.GetLatestCodeProcessEntryTime(ctx, issueKey)
 	return t, t, found, err
@@ -149,6 +153,10 @@ func (f *fakeIssueSessionRepoForDashboard) OpenOrResumeSessionAt(ctx context.Con
 func (f *fakeIssueSessionRepoForDashboard) UpdateStoryPoints(ctx context.Context, issueKey string, sp float64, assigneeEmail, issueSummary, sprintName string) error {
 	return nil
 }
+func (f *fakeIssueSessionRepoForDashboard) SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
+	return nil
+}
+
 func (f *fakeIssueSessionRepoForDashboard) CloseSession(ctx context.Context, issueKey string, additionalSeconds int64) error {
 	return nil
 }

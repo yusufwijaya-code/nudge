@@ -28,10 +28,11 @@ describe('AdminShellComponent', () => {
     expect(hrefs).toEqual(['/admin', '/admin/users', '/admin/broadcast', '/admin/chat-logs', '/admin/tracking-rules']);
   });
 
-  it('has a Dashboard Utama button to the main dashboard', () => {
-    const btn = el().querySelector('a.btn-home') as HTMLAnchorElement;
+  it('has a Dashboard Utama button at the bottom of the sidebar, not in the top bar', () => {
+    const btn = el().querySelector('.sidebar-footer a.sidebar-home') as HTMLAnchorElement;
     expect(btn.textContent).toContain('Dashboard Utama');
     expect(btn.getAttribute('href')).toBe('/dashboard');
+    expect(el().querySelector('.topbar a.btn-home')).toBeNull();
   });
 
   it('has no board picker', () => {

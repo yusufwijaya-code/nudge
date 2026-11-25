@@ -39,6 +39,14 @@
     </nav>
 
     <div class="sidebar-footer">
+      <a class="sidebar-home" routerLink="/dashboard" (click)="closeSidebar()">
+        <span class="sidebar-home-icon"><app-icon name="arrow-left" [size]="18" /></span>
+        <span class="sidebar-home-text">
+          <strong>Dashboard Utama</strong>
+          <small>Kembali ke tiket saya</small>
+        </span>
+        <app-icon class="sidebar-home-go" name="chevron-right" [size]="16" />
+      </a>
       <div class="sidebar-tip">
         <app-icon name="shield-check" [size]="16" />
         <span>Perubahan pengaturan user oleh admin selalu diberitahukan ke user lewat DM.</span>
@@ -75,11 +83,6 @@
       </div>
 
       <div class="topbar-right">
-        <a class="btn btn-ghost btn-sm btn-home" routerLink="/dashboard">
-          <app-icon name="arrow-left" [size]="14" />
-          <span>Dashboard Utama</span>
-        </a>
-
         <div class="user-menu" #userMenu>
           <button
             type="button"

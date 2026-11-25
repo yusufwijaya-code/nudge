@@ -25,6 +25,10 @@ func (f *fakeIssueSessionRepoForReport) OpenOrResumeSessionAt(ctx context.Contex
 func (f *fakeIssueSessionRepoForReport) UpdateStoryPoints(ctx context.Context, issueKey string, sp float64, assigneeEmail, issueSummary, sprintName string) error {
 	return nil
 }
+func (f *fakeIssueSessionRepoForReport) SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
+	return nil
+}
+
 func (f *fakeIssueSessionRepoForReport) CloseSession(ctx context.Context, issueKey string, additionalSeconds int64) error {
 	return nil
 }

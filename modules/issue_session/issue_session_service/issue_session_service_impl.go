@@ -34,6 +34,10 @@ func (s *issueSessionServiceImpl) CloseSession(ctx context.Context, issueKey str
 	return s.repo.CloseSession(ctx, issueKey, additionalSeconds)
 }
 
+func (s *issueSessionServiceImpl) SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
+	return s.repo.SetAccumulatedSeconds(ctx, issueKey, seconds)
+}
+
 func (s *issueSessionServiceImpl) GetActiveSessions(ctx context.Context) ([]issue_session_dto.IssueSession, error) {
 	return s.repo.GetActiveSessions(ctx)
 }

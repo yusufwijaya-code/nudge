@@ -43,25 +43,39 @@ export interface ActiveTicket extends TicketCard {
   deadlineText: string;
 }
 
-/** 9300 → "2 jam 35 menit", 900 → "15 menit", 0 → "0 menit"; sign is ignored. */
+/**
+ * From the largest non-zero unit down to the second; the sign is ignored.
+ * 9312 → "2 jam 35 menit 12 detik", 900 → "15 menit 0 detik", 0 → "0 detik",
+ * 90_000 → "1 hari 1 jam 0 menit 0 detik".
+ */
 export function shortDuration(seconds: number): string {
-  const total = Math.floor(Math.abs(seconds) / 60);
-  const days = Math.floor(total / 1440);
-  const hours = Math.floor((total % 1440) / 60);
-  const minutes = total % 60;
-  const parts = [days && `${days} hari`, hours && `${hours} jam`, minutes && `${minutes} menit`].filter(Boolean);
-  return parts.length ? parts.join(' ') : '0 menit';
+  const total = Math.floor(Math.abs(seconds));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (days > 0) return `${days} hari ${hours} jam ${minutes} menit ${secs} detik`;
+  if (hours > 0) return `${hours} jam ${minutes} menit ${secs} detik`;
+  if (minutes > 0) return `${minutes} menit ${secs} detik`;
+  return `${secs} detik`;
+}
+
+/** Decimal hours (sprint report) → the same second-precise text: 2.5 → "2 jam 30 menit 0 detik". */
+export function hoursDuration(hours: number): string {
+  return shortDuration(Math.round(hours * 3600));
 }
 
 const WIB = 'Asia/Jakarta';
 const dayKey = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: WIB });
 
-/** ISO instant → "Hari ini 16:05", "Besok 08:30", "Kemarin 09:10" or "Sen, 17 Nov 11:00" (WIB). */
+/** ISO instant → "Hari ini 16:05:09", "Besok 08:30:00", "Kemarin 09:10:41" or "Sen, 17 Nov 11:00:00" (WIB). */
 export function whenLabel(iso: string | undefined, now: Date = new Date()): string {
   if (!iso) return '';
   const at = new Date(iso);
   if (isNaN(at.getTime())) return '';
-  const time = at.toLocaleTimeString('id-ID', { timeZone: WIB, hour: '2-digit', minute: '2-digit', hour12: false }).replace('.', ':');
+  const time = at
+    .toLocaleTimeString('id-ID', { timeZone: WIB, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+    .replace(/\./g, ':');
   const day = 86_400_000;
   const relative: Record<string, string> = {
     [dayKey(now)]: 'Hari ini',
@@ -232,6 +246,7 @@ export class HomeComponent {
   });
 
   protected readonly preview = GROUP_PREVIEW;
+  protected readonly hoursDuration = hoursDuration;
 
   /** Code Process tickets: over budget first, then by budget used. */
   protected active = computed<ActiveTicket[]>(() =>
