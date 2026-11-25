@@ -230,9 +230,9 @@ func TestDashboard_ShowsOnlyWorkingTicketsWithBudgetAndCountsCOREReviewAsWorking
 		"To Do *1* · Code Process *1* · CODE REVIEW *1* · Done *1*",
 		"🔴 *1 tiket lewat budget*",
 		"*CORE-2* Voucher API", // CORE in Code Review is still counted
-		"🔴 Lewat 1 jam 0 menit 0 detik",
+		"🔴 Lewat 1:00:00",
 		"*CORE-1* Fix login",
-		"⏱ Sisa 2 jam 0 menit 0 detik",
+		"⏱ Sisa 2:00:00",
 		"🔔 Notifikasi aktif",
 	} {
 		if !strings.Contains(r.Text, want) {
@@ -354,7 +354,7 @@ func TestMyTickets_SubtasksHangUnderTheirParentAndCanBeMoved(t *testing.T) {
 	f.dash.board = b
 	r := f.svc.Command(context.Background(), dev, "/n-mytickets core")
 	for _, want := range []string{
-		"• *CORE-1* Fix login\n   Code Process · 3 SP\n   ⏱ Sisa 2 jam 0 menit 0 detik · berjalan 1 jam 0 menit 0 detik · deadline 14:00:00 WIB\n\n      ↳ *CORE-50* Sub\n         Done · subtask",
+		"• *CORE-1* Fix login\n   Code Process · 3 SP\n   ⏱ Sisa 2:00:00 · berjalan 1:00:00 · deadline 14:00:00 WIB\n\n      ↳ *CORE-50* Sub\n         Done · subtask",
 		"• *CORE-3* Report\n   To Do\n\n      ↳ *CORE-51* Linked\n         To Do · relates to",
 		"*CORE Board · 3 tiket (+2 subtask/terkait)*",
 	} {
@@ -430,7 +430,7 @@ func TestTiket_DetailHasAButtonPerWorkflowStatusExceptTheCurrentOne(t *testing.T
 	if strings.Join(labels, ",") != "→ To Do,→ CODE REVIEW" {
 		t.Errorf("move buttons = %v", labels)
 	}
-	if !strings.Contains(r.Text, "*Sisa waktu:* 2 jam 0 menit 0 detik") || !strings.Contains(r.Text, "*Batas Waktu Penyelesaian:* ") || !strings.Contains(r.Text, "Fix login") {
+	if !strings.Contains(r.Text, "*Sisa waktu:* 2:00:00") || !strings.Contains(r.Text, "*Batas Waktu Penyelesaian:* ") || !strings.Contains(r.Text, "Fix login") {
 		t.Errorf("detail text:\n%s", r.Text)
 	}
 }
@@ -688,10 +688,10 @@ func TestMyTickets_ListsEveryTicketWithItsTimeInfo(t *testing.T) {
 		"*📋 Tiket Saya*",
 		"To Do *1* · Code Process *1* · CODE REVIEW *1* · Done *1*",
 		"⏱ *2* sedang dikerjakan · 🔴 *1* lewat budget",
-		"• *CORE-1* Fix login\n   Code Process · 3 SP\n   ⏱ Sisa 2 jam 0 menit 0 detik · berjalan 1 jam 0 menit 0 detik · deadline 14:00:00 WIB",
-		"• *CORE-2* Voucher API\n   CODE REVIEW · 2 SP\n   🔴 Lewat 1 jam 0 menit 0 detik · berjalan 3 jam 0 menit 0 detik dari budget 2 jam 0 menit 0 detik",
-		"• *CORE-3* Report\n   To Do · 2 SP\n   Budget 2 jam 0 menit 0 detik · dihitung saat masuk Code Process",
-		"✔ Tercatat 30 menit 0 detik dari budget 1 jam 0 menit 0 detik",
+		"• *CORE-1* Fix login\n   Code Process · 3 SP\n   ⏱ Sisa 2:00:00 · berjalan 1:00:00 · deadline 14:00:00 WIB",
+		"• *CORE-2* Voucher API\n   CODE REVIEW · 2 SP\n   🔴 Lewat 1:00:00 · berjalan 3:00:00 dari budget 2:00:00",
+		"• *CORE-3* Report\n   To Do · 2 SP\n   Budget 2:00:00 · dihitung saat masuk Code Process",
+		"✔ Tercatat 30:00 dari budget 1:00:00",
 		"↳ *CORE-50* Sub\n         To Do · subtask",
 	} {
 		if !strings.Contains(r.Text, want) {

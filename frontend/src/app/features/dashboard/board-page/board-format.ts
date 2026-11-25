@@ -1,4 +1,5 @@
 // Pure display helpers shared by the list and column views.
+import { formatDuration } from '../../../core/duration-format';
 
 /** Colour family of a status dot, from its name (Jira workflows differ per project). */
 export type StatusTone = 'todo' | 'process' | 'review' | 'done' | 'other';
@@ -12,18 +13,9 @@ export function statusTone(status: string): StatusTone {
   return 'other';
 }
 
-/**
- * From the largest non-zero unit down to the second; the sign is ignored.
- * 5415 → "1j 30m 15dtk", 2700 → "45m 0dtk", 7200 → "2j 0m 0dtk", 20 → "20dtk".
- */
+/** H:MM:SS, M:SS or "S detik" (see core/duration-format.ts); the sign is ignored. */
 export function shortDuration(totalSeconds: number): string {
-  const total = Math.floor(Math.abs(totalSeconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  if (h > 0) return `${h}j ${m}m ${s}dtk`;
-  if (m > 0) return `${m}m ${s}dtk`;
-  return `${s}dtk`;
+  return formatDuration(totalSeconds);
 }
 
 /** Elapsed share of the budget, capped at 100 (0 when there is no budget). */

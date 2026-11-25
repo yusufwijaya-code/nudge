@@ -125,8 +125,8 @@ describe('BoardPageComponent', () => {
     const rows = el.querySelectorAll('[data-status="To Do"] tbody tr');
     expect(rows.length).toBe(2);
     const over = el.querySelector('[data-card="OMS-2"] [data-time]')!;
-    expect(over.textContent).toContain('1j 15m 0dtk / 1j 0m 0dtk');
-    expect(over.textContent).toContain('lewat 15m 0dtk');
+    expect(over.textContent).toContain('1:15:00 / 1:00:00');
+    expect(over.textContent).toContain('lewat 15:00');
     expect(over.classList).toContain('over');
     expect(el.querySelector('[data-card="OMS-2"]')!.textContent).toContain('↳ OMS-9 · Payments epic');
     expect(el.querySelector('[data-card="OMS-1"]')!.textContent).toContain('—');
@@ -228,7 +228,7 @@ describe('BoardPageComponent', () => {
     expect(branch.getAttribute('data-branch-of')).toBe('CORE-10923');
     expect(branch.previousElementSibling?.getAttribute('data-card')).toBe('CORE-10923');
     expect(branch.textContent).toContain('subtask');
-    expect(branch.textContent).toContain('30m 0dtk / 1j 0m 0dtk');
+    expect(branch.textContent).toContain('30:00 / 1:00:00');
     expect(branch.querySelector('[data-status-chip]')).not.toBeNull();
     expect(el.querySelector('[data-branch="CORE-777"]')).toBeNull();
     expect(el.querySelector('.tb-hint')?.textContent).toContain('+ 1 subtask');
@@ -241,8 +241,8 @@ describe('BoardPageComponent', () => {
     const row = el.querySelector('[data-card="CORE-10923"]') as HTMLElement;
     expect(row.querySelector('.tb-num')?.textContent?.trim()).toBe('3');
     const time = row.querySelector('[data-time]') as HTMLElement;
-    expect(time.textContent).toContain('2j 30m 0dtk / 3j 0m 0dtk');
-    expect(time.textContent).toContain('di bawah budget 30m 0dtk');
+    expect(time.textContent).toContain('2:30:00 / 3:00:00');
+    expect(time.textContent).toContain('di bawah budget 30:00');
     expect(time.classList).toContain('stopped');
   });
 
@@ -627,7 +627,7 @@ describe('BoardPageComponent', () => {
     const cmp = renderWithBranch().componentInstance as any;
     const base = { issueKey: 'X-1', hasBudgetDetail: true, elapsedSeconds: 1800, budgetSeconds: 3600 };
     const tip = cmp.timeTooltip({ ...base, startedAt: '2026-11-15T03:00:00Z' });
-    expect(tip).toContain('Sisa 30m 0dtk');
+    expect(tip).toContain('Sisa 30:00');
     expect(tip).toContain('Mulai');
     expect(cmp.timeTooltip({ ...base, startedAt: 'garbage' })).not.toContain('Mulai');
   });
@@ -635,9 +635,9 @@ describe('BoardPageComponent', () => {
   it('explains the time bar in a tooltip', () => {
     const fixture = render();
     const time = fixture.nativeElement.querySelector('[data-card="OMS-2"] [data-time]') as HTMLElement;
-    expect(time.getAttribute('title')).toContain('Dipakai 1j 15m');
-    expect(time.getAttribute('title')).toContain('Budget 1j');
-    expect(time.getAttribute('title')).toContain('Lewat 15m 0dtk');
+    expect(time.getAttribute('title')).toContain('Dipakai 1:15:00');
+    expect(time.getAttribute('title')).toContain('Budget 1:00:00');
+    expect(time.getAttribute('title')).toContain('Lewat 15:00');
   });
   it('switches to the column view and remembers it', fakeAsync(() => {
     localStorage.removeItem('nudge.board.view');
@@ -701,13 +701,13 @@ describe('BoardPageComponent', () => {
 
 describe('board-page helpers', () => {
   it('formats durations compactly', () => {
-    expect(shortDuration(5415)).toBe('1j 30m 15dtk');
-    expect(shortDuration(5400)).toBe('1j 30m 0dtk');
-    expect(shortDuration(2700)).toBe('45m 0dtk');
-    expect(shortDuration(7200)).toBe('2j 0m 0dtk');
-    expect(shortDuration(-900)).toBe('15m 0dtk');
-    expect(shortDuration(52)).toBe('52dtk');
-    expect(shortDuration(0)).toBe('0dtk');
+    expect(shortDuration(5415)).toBe('1:30:15');
+    expect(shortDuration(5400)).toBe('1:30:00');
+    expect(shortDuration(2700)).toBe('45:00');
+    expect(shortDuration(7200)).toBe('2:00:00');
+    expect(shortDuration(-900)).toBe('15:00');
+    expect(shortDuration(52)).toBe('52 detik');
+    expect(shortDuration(0)).toBe('0 detik');
   });
 
   it('maps status names to a tone', () => {

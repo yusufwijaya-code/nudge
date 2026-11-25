@@ -251,9 +251,9 @@ func TestRunOnce_LeavingTrackedStatusAddsTheBudgetLine(t *testing.T) {
 		used                int64
 		want                string
 	}{
-		{"finished early", "CORE-1", "CODE REVIEW", "Code Completed", 2, 3600, "⏱ Selesai 0 hari 1 jam 0 menit 0 detik lebih awal dari budget 0 hari 2 jam 0 menit 0 detik"},
-		{"back to To Do", "OMS-2", "Code Process", "To Do", 2, 3600, "⏱ Waktu terpakai 0 hari 1 jam 0 menit 0 detik dari budget 0 hari 2 jam 0 menit 0 detik"},
-		{"over budget", "OMS-3", "Code Process", "Code Review", 1, 7200, "⏱ Waktu terpakai 0 hari 2 jam 0 menit 0 detik dari budget 0 hari 1 jam 0 menit 0 detik (lewat 0 hari 1 jam 0 menit 0 detik)"},
+		{"finished early", "CORE-1", "CODE REVIEW", "Code Completed", 2, 3600, "⏱ Selesai 1:00:00 lebih awal dari budget 2:00:00"},
+		{"back to To Do", "OMS-2", "Code Process", "To Do", 2, 3600, "⏱ Waktu terpakai 1:00:00 dari budget 2:00:00"},
+		{"over budget", "OMS-3", "Code Process", "Code Review", 1, 7200, "⏱ Waktu terpakai 2:00:00 dari budget 1:00:00 (lewat 1:00:00)"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
