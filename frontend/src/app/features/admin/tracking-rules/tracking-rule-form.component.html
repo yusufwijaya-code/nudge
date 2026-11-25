@@ -259,7 +259,7 @@
           <span class="card-icon accent"><app-icon name="clock" [size]="20" /></span>
           <div>
             <h2>Jadwal yang tidak dihitung</h2>
-            <p>Jam yang jatuh di jadwal ini tidak dihitung ke waktu tiket {{ l.projectKey }}, meski tiketnya sedang di status yang dihitung. Menyimpan aturan menghitung ulang semua sprint dari Jira.</p>
+            <p>Jam yang termasuk dalam jadwal ini tidak dihitung ke dalam waktu tiket {{ l.projectKey }}, meskipun tiket berada pada status yang dihitung. Penyimpanan aturan akan menghitung ulang seluruh sprint dari Jira.</p>
           </div>
         </header>
 
@@ -292,12 +292,12 @@
 
         <div class="trf-ex-block">
           <div class="trf-ex-head">
-            <h3 class="trf-ex-title">Ritual khusus &amp; potongan tambahan</h3>
+            <h3 class="trf-ex-title">Ritual Khusus dan Potongan Tambahan</h3>
             <button type="button" class="btn btn-ghost btn-sm" data-add-ritual [disabled]="!canAddRitual()" (click)="addRitual()">
-              <app-icon name="plus" [size]="14" /> Tambah ritual
+              <app-icon name="plus" [size]="14" /> Tambah Ritual
             </button>
           </div>
-          <p class="trf-ex-help">Mis. Sprint Planning / Grooming: Senin 11:00 selama 6 jam 30 menit, hanya di minggu ke-2 sprint.</p>
+          <p class="trf-ex-help">Contoh: Sprint Planning / Grooming pada hari Senin pukul 11:00 selama 6 jam 30 menit, hanya berlaku pada minggu ke-2 sprint.</p>
           @for (r of rituals(); track $index; let i = $index) {
             <div class="trf-ex-ritual" [class.off]="!r.enabled" [attr.data-ritual]="i">
               <div class="trf-ex-ritual-top">
@@ -306,7 +306,7 @@
                   <span class="check-box" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M20 6 9 17l-5-5" /></svg></span>
                   <span class="visually-hidden">Ritual aktif</span>
                 </label>
-                <input type="text" class="trf-ex-name" maxlength="60" placeholder="Nama ritual, mis. Sprint Planning / Grooming" [ngModel]="r.name" (ngModelChange)="setRitual(i, { name: $event })" aria-label="Nama ritual" />
+                <input type="text" class="trf-ex-name" maxlength="60" placeholder="Nama ritual, contoh: Sprint Planning / Grooming" [ngModel]="r.name" (ngModelChange)="setRitual(i, { name: $event })" aria-label="Nama ritual" />
                 <button type="button" class="icon-btn" [attr.aria-label]="'Hapus ritual ' + (r.name || (i + 1))" data-remove-ritual (click)="removeRitual(i)">
                   <app-icon name="trash" [size]="16" />
                 </button>
@@ -337,12 +337,12 @@
               </div>
               <p class="trf-ex-cut" data-cut>
                 <app-icon name="clock" [size]="14" />
-                Potongan: {{ r.start }} – {{ slotEnd(r.start, r.minutes) }} ({{ slotLength(r.minutes) }})
-                <span class="trf-ex-when">{{ r.frequency === 'sprint_week' ? 'Hanya berlaku di minggu ke-' + r.sprintWeek + ' sprint' : 'Berlaku setiap minggu' }}</span>
+                Potongan waktu: {{ r.start }} – {{ slotEnd(r.start, r.minutes) }} ({{ slotLength(r.minutes) }})
+                <span class="trf-ex-when">{{ r.frequency === 'sprint_week' ? 'Berlaku hanya pada minggu ke-' + r.sprintWeek + ' sprint' : 'Berlaku setiap minggu' }}</span>
               </p>
             </div>
           } @empty {
-            <p class="trf-empty" data-no-rituals>Belum ada ritual khusus.</p>
+            <p class="trf-empty" data-no-rituals>Belum ada ritual khusus yang ditambahkan.</p>
           }
         </div>
         @if (fieldErrors().excluded) {

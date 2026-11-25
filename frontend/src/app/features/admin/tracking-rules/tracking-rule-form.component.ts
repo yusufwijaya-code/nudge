@@ -39,7 +39,7 @@ const WEEKDAYS = [
 const WEEKDAY_OPTIONS: SelectOption<number>[] = WEEKDAYS.map((d) => ({ value: d.value, label: d.label }));
 const FREQUENCY_OPTIONS: SelectOption<RitualFrequency>[] = [
   { value: 'weekly', label: 'Setiap minggu' },
-  { value: 'sprint_week', label: 'Hanya di minggu ke-N sprint' },
+  { value: 'sprint_week', label: 'Hanya pada minggu ke-N sprint' },
 ];
 const SPRINT_WEEK_OPTIONS: SelectOption<number>[] = [1, 2, 3, 4].map((n) => ({ value: n, label: `Minggu ke-${n}` }));
 
@@ -521,7 +521,7 @@ export class TrackingRuleFormComponent {
           'success',
           'Aturan board tersimpan',
           saved?.recalculating
-            ? `${key} berlaku mulai cycle poller berikutnya. Waktu semua sprint ${key} sedang dihitung ulang dari Jira di background.`
+            ? `${key} berlaku mulai cycle poller berikutnya. Waktu seluruh sprint ${key} sedang dihitung ulang dari Jira di latar belakang.`
             : `${key} berlaku mulai cycle poller berikutnya. Waktu yang sudah tercatat bisa dihitung ulang dari Jira.`,
           10000,
           recalculateAction(this.api, this.toast),

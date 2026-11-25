@@ -341,7 +341,7 @@ describe('TrackingRuleFormComponent', () => {
       const cut = el.querySelector('[data-cut]')!.textContent!.replace(/\s+/g, ' ');
       expect(cut).toContain('11:00 – 17:30');
       expect(cut).toContain('6 jam 30 menit');
-      expect(cut).toContain('Hanya berlaku di minggu ke-2 sprint');
+      expect(cut).toContain('Berlaku hanya pada minggu ke-2 sprint');
       c.setRitual(0, { frequency: 'weekly' });
       fixture.detectChanges();
       expect(el.querySelector('[data-cut]')!.textContent).toContain('Berlaku setiap minggu');
@@ -398,7 +398,7 @@ describe('TrackingRuleFormComponent', () => {
     it('says in the toast that the sprints are being recalculated', () => {
       const { el } = posForm();
       (el.querySelector('[data-save]') as HTMLButtonElement).click();
-      expect(toast.show.calls.mostRecent().args[2]).toContain('semua sprint POS sedang dihitung ulang dari Jira');
+      expect(toast.show.calls.mostRecent().args[2]).toContain('seluruh sprint POS sedang dihitung ulang dari Jira');
     });
   });
 
