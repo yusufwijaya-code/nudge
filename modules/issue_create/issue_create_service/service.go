@@ -11,6 +11,7 @@ import (
 	"log"
 	"reflect"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -118,15 +119,40 @@ type Candidate struct {
 	SubtaskCount   int    `json:"subtaskCount"`
 }
 type CreateRequest struct {
-	BoardID           int64          `json:"boardId"`
-	TypeID            string         `json:"typeId"`
-	Summary           string         `json:"summary"`
-	Description       string         `json:"description"`
-	StoryPoints       *float64       `json:"storyPoints"`
-	AssigneeAccountID *string        `json:"assigneeAccountId"`
-	ParentKey         *string        `json:"parentKey"`
-	Fields            map[string]any `json:"fields"`
+	BoardID           int64    `json:"boardId"`
+	TypeID            string   `json:"typeId"`
+	Summary           string   `json:"summary"`
+	Description       string   `json:"description"`
+	StoryPoints       *float64 `json:"storyPoints"`
+	AssigneeAccountID *string  `json:"assigneeAccountId"`
+	ParentKey         *string  `json:"parentKey"`
+	// SprintID puts the new card into that sprint of the board (active or
+	// future); nil leaves it in the backlog. Ignored for subtasks, which follow
+	// their parent's sprint.
+	SprintID *int64         `json:"sprintId"`
+	Fields   map[string]any `json:"fields"`
 }
+
+// Sprint is one sprint the card can be created into.
+type Sprint struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	State     string `json:"state"`
+	StartDate string `json:"startDate,omitempty"`
+	EndDate   string `json:"endDate,omitempty"`
+}
+
+// SprintMoveError: the card exists (Key) but could not be put into its sprint.
+type SprintMoveError struct {
+	Key string
+	Err error
+}
+
+func (e *SprintMoveError) Error() string {
+	return "issue_create: card " + e.Key + " created but not moved to its sprint: " + e.Err.Error()
+}
+func (e *SprintMoveError) Unwrap() error { return e.Err }
+
 type Row struct {
 	Title       string   `json:"title"`
 	StoryPoints *float64 `json:"storyPoints"`
@@ -255,6 +281,34 @@ func (s *Service) metaFor(ctx context.Context, cred *jira_client_dto.Credential,
 	s.meta[project] = cachedMeta{meta: m, at: s.d.Now(), rule: rule}
 	s.mu.Unlock()
 	return m, nil
+}
+
+// Sprints lists the board's active and future sprints (active first), the ones
+// a new card can be created into.
+func (s *Service) Sprints(ctx context.Context, email string, boardID int64) ([]Sprint, error) {
+	cred, err := s.cred(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.projectOf(ctx, email, boardID); err != nil {
+		return nil, err
+	}
+	return s.sprintsFor(ctx, cred, boardID)
+}
+
+func (s *Service) sprintsFor(ctx context.Context, cred *jira_client_dto.Credential, boardID int64) ([]Sprint, error) {
+	refs, err := s.d.Jira.BoardSprintsAs(ctx, cred, boardID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Sprint, 0, len(refs))
+	for _, r := range refs {
+		if r.State == "active" || r.State == "future" {
+			out = append(out, Sprint{ID: r.ID, Name: r.Name, State: r.State, StartDate: r.StartDate, EndDate: r.EndDate})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].State == "active" && out[j].State != "active" })
+	return out, nil
 }
 
 func (s *Service) Users(ctx context.Context, email string, boardID int64, q string) ([]User, error) {
@@ -445,6 +499,25 @@ func (s *Service) CreateOne(ctx context.Context, email string, req CreateRequest
 		}
 		fields[f.ID] = v
 	}
+	// The sprint is checked before anything is created: it must be one of this
+	// board's active or future sprints.
+	var sprintID int64
+	if req.SprintID != nil && !t.Subtask {
+		sprints, err := s.sprintsFor(ctx, cred, req.BoardID)
+		if err != nil {
+			return "", err
+		}
+		found := false
+		for _, sp := range sprints {
+			if sp.ID == *req.SprintID {
+				found = true
+			}
+		}
+		if !found {
+			return "", &ValidationError{Message: "Sprint tidak ditemukan di board ini (hanya sprint aktif atau akan datang)", Field: "sprint"}
+		}
+		sprintID = *req.SprintID
+	}
 	assignee, err := s.assignee(ctx, cred, req.AssigneeAccountID)
 	if err != nil {
 		return "", err
@@ -453,8 +526,17 @@ func (s *Service) CreateOne(ctx context.Context, email string, req CreateRequest
 	key, err := s.d.Jira.CreateIssueAs(ctx, cred, fields)
 	if err != nil {
 		s.forgetStaleMeta(project, t, err)
+		return key, err
 	}
-	return key, err
+	// Through the Agile API after the create: the Sprint field is on few create
+	// screens (a Task often lacks it), so putting it in the create body would
+	// silently leave the card in the backlog.
+	if sprintID > 0 {
+		if err := s.d.Jira.MoveToSprintAs(ctx, cred, sprintID, []string{key}); err != nil {
+			return key, &SprintMoveError{Key: key, Err: err}
+		}
+	}
+	return key, nil
 }
 
 // forgetStaleMeta drops the project's cached meta when Jira rejected a

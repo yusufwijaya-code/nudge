@@ -20,6 +20,7 @@ type Service interface {
 	Status(ctx context.Context, email string) (svc.Status, error)
 	Meta(ctx context.Context, email string, boardID int64) (svc.Meta, error)
 	Users(ctx context.Context, email string, boardID int64, q string) ([]svc.User, error)
+	Sprints(ctx context.Context, email string, boardID int64) ([]svc.Sprint, error)
 	Parent(ctx context.Context, email string, boardID int64, key string) (svc.Parent, error)
 	Parents(ctx context.Context, email string, boardID int64, q string) ([]svc.Candidate, error)
 	CreateOne(ctx context.Context, email string, req svc.CreateRequest) (string, error)
@@ -42,6 +43,7 @@ func Routes(g *gin.RouterGroup, h *Handler) {
 	c.GET("/status", h.status)
 	c.GET("/meta", h.meta)
 	c.GET("/users", h.users)
+	c.GET("/sprints", h.sprints)
 	c.GET("/parent/:key", h.parent)
 	c.GET("/parents", h.parents)
 	c.POST("/issue", h.createOne)
@@ -122,6 +124,19 @@ func (h *Handler) meta(c *gin.Context) {
 	c.JSON(http.StatusOK, m)
 }
 
+func (h *Handler) sprints(c *gin.Context) {
+	id, ok := boardID(c)
+	if !ok {
+		return
+	}
+	sp, err := h.s.Sprints(c.Request.Context(), email(c), id)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"sprints": sp})
+}
+
 func (h *Handler) users(c *gin.Context) {
 	id, ok := boardID(c)
 	if !ok {
@@ -169,6 +184,13 @@ func (h *Handler) createOne(c *gin.Context) {
 		return
 	}
 	key, err := h.s.CreateOne(c.Request.Context(), email(c), req)
+	var moved *svc.SprintMoveError
+	if errors.As(err, &moved) {
+		// The card exists: report it, with a warning that it is in the backlog.
+		log.Printf("issue_create: %s created but sprint move failed: %v", key, moved.Err)
+		c.JSON(http.StatusCreated, gin.H{"key": key, "url": h.jiraBaseURL + "/browse/" + key, "sprintWarning": "Card dibuat, tapi gagal dimasukkan ke sprint (ada di backlog). Pindahkan manual di Jira."})
+		return
+	}
 	if err != nil {
 		h.fail(c, err)
 		return

@@ -42,6 +42,11 @@
             <input type="number" min="0" max="100" step="0.5" placeholder="0–100" [value]="sp() ?? ''" (input)="sp.set($any($event.target).value === '' ? null : +$any($event.target).value)" />
           </label>
         }
+        @if (!t.subtask) {
+          <div class="cc-field" data-sprint-field><span>Sprint</span>
+            <app-select data-sprint [options]="sprintOptions()" [ngModel]="sprintId()" [ngModelOptions]="{ standalone: true }" (ngModelChange)="setSprint($event)" ariaLabel="Sprint" />
+          </div>
+        }
         <div class="cc-field"><span>Assignee</span><app-user-picker [boardId]="boardId()" (picked)="assignee.set($event)" /></div>
         @if (t.subtask) {
           <div class="cc-field" data-parent-field><span>Parent *</span>
@@ -66,6 +71,7 @@
     @if (formError()) { <p class="cc-err cc-pop" role="alert">{{ formError() }}</p> }
     @if (lastCreated(); as c) {
       <div class="cc-done cc-pop" data-created><app-icon name="check-circle" [size]="18" /> <a [href]="c.url" target="_blank" rel="noopener">{{ c.key }}</a> dibuat
+        @if (c.sprintWarning) { <small class="cc-err" data-sprint-warning>{{ c.sprintWarning }}</small> }
         <button type="button" class="btn btn-soft btn-sm" (click)="again()">Buat lagi</button></div>
     }
     <div class="cc-actions">

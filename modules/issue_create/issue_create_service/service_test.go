@@ -22,6 +22,23 @@ type fakeJira struct {
 	metaHits int
 	search   []jira_client_dto.IssueBrief
 	lastJQL  string
+	sprints  []jira_client_dto.SprintRef
+	moved    map[int64][]string
+	moveErr  error
+}
+
+func (f *fakeJira) BoardSprintsAs(context.Context, *jira_client_dto.Credential, int64) ([]jira_client_dto.SprintRef, error) {
+	return f.sprints, nil
+}
+func (f *fakeJira) MoveToSprintAs(_ context.Context, _ *jira_client_dto.Credential, id int64, keys []string) error {
+	if f.moveErr != nil {
+		return f.moveErr
+	}
+	if f.moved == nil {
+		f.moved = map[int64][]string{}
+	}
+	f.moved[id] = append(f.moved[id], keys...)
+	return nil
 }
 
 func (f *fakeJira) SearchBriefsAs(_ context.Context, _ *jira_client_dto.Credential, jql string, _ int) ([]jira_client_dto.IssueBrief, error) {
@@ -453,5 +470,82 @@ func TestCreateSubtasks_CoreWritesTheSubtaskField(t *testing.T) {
 	}
 	if j.created[0]["customfield_11053"] != 2.0 || j.created[0]["customfield_10125"] != nil {
 		t.Fatalf("subtask fields = %v, want SP on customfield_11053 only", j.created[0])
+	}
+}
+
+func sprintsJira() *fakeJira {
+	j := omsJira()
+	j.sprints = []jira_client_dto.SprintRef{
+		{ID: 7, Name: "Sprint 8", State: "future"},
+		{ID: 6, Name: "Sprint 7", State: "active"},
+		{ID: 5, Name: "Sprint 6", State: "closed"},
+	}
+	return j
+}
+
+func TestSprints_ActiveFirstAndNoClosed(t *testing.T) {
+	s := newSvc(sprintsJira(), &fakeAI{})
+	got, err := s.Sprints(context.Background(), "dev@esb.co.id", 28)
+	if err != nil || len(got) != 2 || got[0].ID != 6 || got[1].ID != 7 {
+		t.Fatalf("sprints = %+v, err = %v (want active 6 then future 7, no closed)", got, err)
+	}
+}
+
+// Whatever the issue type (Story, Bug, Task, ...), a chosen sprint is applied
+// through the Agile API, not through the create body.
+func TestCreateOne_PutsEveryTypeIntoTheChosenSprint(t *testing.T) {
+	for _, typeID := range []string{"10139"} {
+		j := sprintsJira()
+		s := newSvc(j, &fakeAI{})
+		id := int64(6)
+		key, err := s.CreateOne(context.Background(), "dev@esb.co.id", CreateRequest{BoardID: 28, TypeID: typeID, Summary: "x", SprintID: &id, Fields: map[string]any{"customfield_12001": "https://mr", "customfield_12002": "1"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := j.moved[6]; len(got) != 1 || got[0] != key {
+			t.Fatalf("type %s: moved = %v, want [%s] in sprint 6", typeID, j.moved, key)
+		}
+		if _, in := j.created[0]["customfield_10020"]; in {
+			t.Fatal("the sprint must not be sent in the create body")
+		}
+	}
+}
+
+func TestCreateOne_NoSprintStaysInBacklog(t *testing.T) {
+	j := sprintsJira()
+	s := newSvc(j, &fakeAI{})
+	if _, err := s.CreateOne(context.Background(), "dev@esb.co.id", CreateRequest{BoardID: 28, TypeID: "10139", Summary: "x", Fields: map[string]any{"customfield_12001": "https://mr", "customfield_12002": "1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(j.moved) != 0 {
+		t.Fatalf("moved = %v, want none", j.moved)
+	}
+}
+
+func TestCreateOne_RejectsASprintOfAnotherBoardOrClosedBeforeCreating(t *testing.T) {
+	j := sprintsJira()
+	s := newSvc(j, &fakeAI{})
+	for _, id := range []int64{5, 99} {
+		id := id
+		_, err := s.CreateOne(context.Background(), "dev@esb.co.id", CreateRequest{BoardID: 28, TypeID: "10139", Summary: "x", SprintID: &id, Fields: map[string]any{"customfield_12001": "https://mr", "customfield_12002": "1"}})
+		var v *ValidationError
+		if !errors.As(err, &v) {
+			t.Fatalf("sprint %d: err = %v, want a ValidationError", id, err)
+		}
+	}
+	if len(j.created) != 0 {
+		t.Fatalf("created = %d, want nothing created for an invalid sprint", len(j.created))
+	}
+}
+
+func TestCreateOne_SprintMoveFailureKeepsTheCardAndSaysSo(t *testing.T) {
+	j := sprintsJira()
+	j.moveErr = errors.New("boom")
+	s := newSvc(j, &fakeAI{})
+	id := int64(6)
+	key, err := s.CreateOne(context.Background(), "dev@esb.co.id", CreateRequest{BoardID: 28, TypeID: "10139", Summary: "x", SprintID: &id, Fields: map[string]any{"customfield_12001": "https://mr", "customfield_12002": "1"}})
+	var mv *SprintMoveError
+	if !errors.As(err, &mv) || key == "" || mv.Key != key {
+		t.Fatalf("key = %q, err = %v, want a SprintMoveError carrying the key", key, err)
 	}
 }

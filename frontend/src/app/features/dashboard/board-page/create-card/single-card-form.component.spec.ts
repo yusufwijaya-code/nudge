@@ -44,6 +44,58 @@ describe('SingleCardFormComponent', () => {
     return f;
   }
 
+  const SPRINTS = { sprints: [{ id: 6, name: 'Sprint 7', state: 'active' }, { id: 7, name: 'Sprint 8', state: 'future' }] };
+  const sprintsReq = () => http.expectOne((r) => r.url.endsWith('/create/sprints') && r.params.get('boardId') === '28');
+
+  it('offers the board sprints, preselects the active one and sends the pick for any type', async () => {
+    const f = render();
+    const el: HTMLElement = f.nativeElement;
+    sprintsReq().flush(SPRINTS);
+    f.detectChanges();
+    choose(f, '[data-type]', 'Story');
+    await f.whenStable(); f.detectChanges();
+    expect(shown(el, '[data-sprint]')).toBe('Sprint 7 (aktif)');
+    (el.querySelector('[data-sprint] .ui-select-trigger') as HTMLButtonElement).click(); f.detectChanges();
+    const labels = Array.from(el.querySelectorAll('[data-sprint] .ui-select-option')).map((o) => o.textContent!.trim());
+    expect(labels).toEqual(['Backlog (tanpa sprint)', 'Sprint 7 (aktif)', 'Sprint 8 (akan datang)']);
+    (el.querySelector('[data-sprint] .ui-select-trigger') as HTMLButtonElement).click(); f.detectChanges();
+    choose(f, '[data-sprint]', 'Sprint 8');
+    setIn(el, '[data-summary]', 'Task into a sprint'); setIn(el, '[data-field="customfield_12001"]', 'mr'); choose(f, '[data-field="customfield_12002"]', 'OMS SERVICE');
+    (el.querySelector('[data-submit]') as HTMLButtonElement).click();
+    const req = http.expectOne((r) => r.url.endsWith('/create/issue'));
+    expect(req.request.body.sprintId).toBe(7);
+    req.flush({ key: 'OMS-8', url: 'u', sprintWarning: 'Card dibuat, tapi gagal dimasukkan ke sprint' });
+    f.detectChanges();
+    expect(el.querySelector('[data-sprint-warning]')?.textContent).toContain('gagal dimasukkan ke sprint');
+  });
+
+  it('sends no sprint for Backlog and hides the picker for a subtask', async () => {
+    const f = render();
+    const el: HTMLElement = f.nativeElement;
+    sprintsReq().flush(SPRINTS);
+    f.componentRef.setInput('meta', { ...meta, types: [...meta.types, { id: '10143', name: 'SUB Story', subtask: true, supported: true, parentAllowed: true, fields: [] }] });
+    f.detectChanges();
+    choose(f, '[data-type]', 'SUB Story');
+    expect(el.querySelector('[data-sprint-field]')).toBeNull();
+    choose(f, '[data-type]', 'Story');
+    await f.whenStable(); f.detectChanges();
+    choose(f, '[data-sprint]', 'Backlog');
+    setIn(el, '[data-summary]', 'To backlog'); setIn(el, '[data-field="customfield_12001"]', 'mr'); choose(f, '[data-field="customfield_12002"]', 'OMS SERVICE');
+    (el.querySelector('[data-submit]') as HTMLButtonElement).click();
+    const req = http.expectOne((r) => r.url.endsWith('/create/issue'));
+    expect(req.request.body.sprintId).toBeNull();
+    req.flush({ key: 'OMS-9', url: 'u' });
+  });
+
+  it('still works when the sprints cannot be loaded (Backlog only)', async () => {
+    const f = render();
+    sprintsReq().flush({ error: 'x' }, { status: 502, statusText: 'Bad Gateway' });
+    f.detectChanges();
+    choose(f, '[data-type]', 'Story');
+    await f.whenStable(); f.detectChanges();
+    expect(shown(f.nativeElement, '[data-sprint]')).toBe('Backlog (tanpa sprint)');
+  });
+
   it("renders the type's required fields and submits them", () => {
     const f = render();
     const el: HTMLElement = f.nativeElement;
