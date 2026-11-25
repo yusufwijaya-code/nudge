@@ -18,6 +18,7 @@ import (
 	"nudge/modules/chat_log/chat_log_handler"
 	"nudge/modules/sprint_report"
 	"nudge/modules/sprint_report/sprint_report_handler"
+	"nudge/modules/jira_account"
 	"nudge/modules/tracking_rule"
 	"nudge/modules/user_avatar/user_avatar_handler"
 	"nudge/modules/user_dashboard"
@@ -159,6 +160,14 @@ func MountIssueCreate(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service
 	api := r.Group(cfg.BasePath + "/api/dashboard")
 	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
 	issue_create_handler.Routes(api, h)
+}
+
+// MountJiraAccount mounts Admin › Akun Jira (admin only): the central Jira
+// account the bot acts as.
+func MountJiraAccount(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *jira_account.Handler) {
+	admin := r.Group(cfg.BasePath + "/api/dashboard/admin")
+	admin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg), auth_middleware.AdminMiddleware(cfg))
+	jira_account.AdminRoutes(admin, h)
 }
 
 // MountTrackingRules mounts Admin › Aturan Board (admin only) and the board

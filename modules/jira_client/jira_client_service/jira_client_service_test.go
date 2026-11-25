@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"nudge/config"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 )
 
@@ -566,5 +567,50 @@ func TestSearchCodeProcessIssues_FieldsFollowTheRegistry(t *testing.T) {
 	}
 	if fields != "summary,status,assignee,issuetype,customfield_777,customfield_10020" {
 		t.Errorf("fields = %q, want the active rules' Story Point fields + Sprint", fields)
+	}
+}
+
+// Admin › Akun Jira: the account an admin saved replaces the env pair on the
+// very next request, for the central credential only.
+func TestCentralCredential_FollowsTheAccountSavedInTheAdminPanel(t *testing.T) {
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		json.NewEncoder(w).Encode(map[string]any{"issues": []map[string]any{}})
+	}))
+	defer server.Close()
+	jira_account_holder.SetOverride(nil)
+	t.Cleanup(func() { jira_account_holder.SetOverride(nil) })
+
+	cfg := newTestConfig(server.URL)
+	svc := NewJiraClientService(cfg)
+	search := func(cred *jira_client_dto.Credential) {
+		t.Helper()
+		if _, err := svc.SearchAllIssuesByAssignee(context.Background(), cred, "acc-1"); err != nil {
+			t.Fatalf("SearchAllIssuesByAssignee: %v", err)
+		}
+	}
+
+	search(nil)
+	if want := "Basic " + basicAuthHeaderForTest(cfg.JiraEmail, cfg.JiraAPIToken); gotAuth != want {
+		t.Errorf("before saving: Authorization = %q, want the env pair %q", gotAuth, want)
+	}
+
+	jira_account_holder.SetOverride(&jira_account_holder.Credential{Email: "yusuf.wijaya@esb.co.id", APIToken: "saved-token"})
+	search(nil)
+	if want := "Basic " + basicAuthHeaderForTest("yusuf.wijaya@esb.co.id", "saved-token"); gotAuth != want {
+		t.Errorf("after saving: Authorization = %q, want the saved account %q", gotAuth, want)
+	}
+
+	// A user's own token is still theirs.
+	search(&jira_client_dto.Credential{Email: "dev@esb.co.id", APIToken: "personal-token"})
+	if want := "Basic " + basicAuthHeaderForTest("dev@esb.co.id", "personal-token"); gotAuth != want {
+		t.Errorf("personal credential: Authorization = %q, want %q", gotAuth, want)
+	}
+
+	jira_account_holder.SetOverride(nil)
+	search(nil)
+	if want := "Basic " + basicAuthHeaderForTest(cfg.JiraEmail, cfg.JiraAPIToken); gotAuth != want {
+		t.Errorf("after reset: Authorization = %q, want the env pair again", gotAuth)
 	}
 }

@@ -1,0 +1,36 @@
+// Keyframes fade-up / pop-in / skeleton shimmer are global (styles.scss).
+.source-pill {
+  margin-left: auto; padding: 4px 12px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+  background: var(--accent-soft); color: #b4630a;
+  &.db { background: var(--success-soft); color: var(--success); }
+}
+
+.ja-skeleton { height: 96px; margin: 0 24px 24px; border-radius: var(--radius); }
+
+.ja-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 0; padding: 4px 24px 8px;
+  dt { font-size: .72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted); }
+  dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; small { font-weight: 400; color: var(--text-muted); } }
+  code { padding: 2px 8px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); font-size: .85rem; }
+}
+
+.ja-check {
+  display: flex; align-items: center; gap: 10px; margin: 12px 24px 20px; padding: 12px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--text-muted);
+  span { flex: 1; min-width: 0; small { display: block; color: var(--text-muted); } }
+  &.ok { border-color: rgba(18, 161, 80, .35); background: var(--success-soft); color: var(--success); span { color: var(--text); } }
+  &.bad { border-color: rgba(229, 72, 77, .35); background: var(--error-soft); color: var(--error-strong); span { color: var(--text); } }
+}
+
+.ja-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; padding: 8px 24px 24px; align-items: start; }
+.ja-form { display: flex; flex-direction: column; gap: 14px; }
+.ja-help {
+  padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+  h3 { margin: 0 0 8px; font-size: .95rem; }
+  ol { margin: 0 0 10px; padding-left: 18px; line-height: 1.6; font-size: .88rem; }
+  .hint { display: flex; gap: 6px; margin: 0; font-size: .82rem; color: var(--text-muted); app-icon { flex: none; margin-top: 2px; } }
+}
+
+@media (max-width: 860px) {
+  .ja-layout { grid-template-columns: minmax(0, 1fr); }
+}
