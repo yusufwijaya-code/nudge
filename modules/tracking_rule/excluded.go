@@ -127,24 +127,24 @@ func normalizeExcluded(in *ExcludedSchedule) (ExcludedSchedule, string) {
 		out.DSU = append(out.DSU, DSUSlot{Weekday: d.Weekday, Start: strings.TrimSpace(d.Start), Minutes: d.Minutes})
 	}
 	if len(in.Rituals) > maxRituals {
-		return ExcludedSchedule{}, fmt.Sprintf("Maksimal %d ritual", maxRituals)
+		return ExcludedSchedule{}, fmt.Sprintf("Maksimal %d kegiatan khusus", maxRituals)
 	}
 	for _, r := range in.Rituals {
 		name := strings.TrimSpace(r.Name)
 		switch {
 		case name == "" || len([]rune(name)) > maxRitualName:
-			return ExcludedSchedule{}, fmt.Sprintf("Nama ritual wajib diisi, maksimal %d karakter", maxRitualName)
+			return ExcludedSchedule{}, fmt.Sprintf("Nama kegiatan wajib diisi, maksimal %d karakter", maxRitualName)
 		case r.Weekday < 1 || r.Weekday > 5:
-			return ExcludedSchedule{}, fmt.Sprintf("Hari ritual %q harus Senin sampai Jumat", name)
+			return ExcludedSchedule{}, fmt.Sprintf("Hari kegiatan %q harus Senin sampai Jumat", name)
 		case r.Minutes < 1 || r.Minutes > maxSlotMinutes:
-			return ExcludedSchedule{}, fmt.Sprintf("Durasi ritual %q harus 1 sampai %d menit", name, maxSlotMinutes)
+			return ExcludedSchedule{}, fmt.Sprintf("Durasi kegiatan %q harus 1 sampai %d menit", name, maxSlotMinutes)
 		case r.Frequency != FrequencyWeekly && r.Frequency != FrequencySprintWeek:
-			return ExcludedSchedule{}, fmt.Sprintf("Frekuensi ritual %q tidak dikenal", name)
+			return ExcludedSchedule{}, fmt.Sprintf("Frekuensi kegiatan %q tidak dikenal", name)
 		case r.Frequency == FrequencySprintWeek && (r.SprintWeek < 1 || r.SprintWeek > maxSprintWeekNum):
-			return ExcludedSchedule{}, fmt.Sprintf("Minggu sprint ritual %q harus 1 sampai %d", name, maxSprintWeekNum)
+			return ExcludedSchedule{}, fmt.Sprintf("Minggu sprint kegiatan %q harus 1 sampai %d", name, maxSprintWeekNum)
 		}
 		if _, ok := parseClock(r.Start); !ok {
-			return ExcludedSchedule{}, fmt.Sprintf("Jam mulai ritual %q tidak valid, pakai format HH:MM", name)
+			return ExcludedSchedule{}, fmt.Sprintf("Jam mulai kegiatan %q tidak valid, pakai format HH:MM", name)
 		}
 		week := 0
 		if r.Frequency == FrequencySprintWeek {

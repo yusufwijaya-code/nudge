@@ -292,9 +292,9 @@
 
         <div class="trf-ex-block">
           <div class="trf-ex-head">
-            <h3 class="trf-ex-title">Ritual Khusus dan Potongan Tambahan</h3>
+            <h3 class="trf-ex-title">Kegiatan Khusus dan Potongan Tambahan</h3>
             <button type="button" class="btn btn-ghost btn-sm" data-add-ritual [disabled]="!canAddRitual()" (click)="addRitual()">
-              <app-icon name="plus" [size]="14" /> Tambah Ritual
+              <app-icon name="plus" [size]="14" /> Tambah Kegiatan
             </button>
           </div>
           <p class="trf-ex-help">Contoh: Sprint Planning / Grooming pada hari Senin pukul 11:00 selama 6 jam 30 menit, hanya berlaku pada minggu ke-2 sprint.</p>
@@ -304,29 +304,29 @@
                 <label class="trf-ex-check">
                   <input type="checkbox" class="visually-hidden" [checked]="r.enabled" (change)="setRitual(i, { enabled: !r.enabled })" />
                   <span class="check-box" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M20 6 9 17l-5-5" /></svg></span>
-                  <span class="visually-hidden">Ritual aktif</span>
+                  <span class="visually-hidden">Kegiatan aktif</span>
                 </label>
-                <input type="text" class="trf-ex-name" maxlength="60" placeholder="Nama ritual, contoh: Sprint Planning / Grooming" [ngModel]="r.name" (ngModelChange)="setRitual(i, { name: $event })" aria-label="Nama ritual" />
-                <button type="button" class="icon-btn" [attr.aria-label]="'Hapus ritual ' + (r.name || (i + 1))" data-remove-ritual (click)="removeRitual(i)">
+                <input type="text" class="trf-ex-name" maxlength="60" placeholder="Nama kegiatan, contoh: Sprint Planning / Grooming" [ngModel]="r.name" (ngModelChange)="setRitual(i, { name: $event })" aria-label="Nama kegiatan" />
+                <button type="button" class="icon-btn" [attr.aria-label]="'Hapus kegiatan ' + (r.name || (i + 1))" data-remove-ritual (click)="removeRitual(i)">
                   <app-icon name="trash" [size]="16" />
                 </button>
               </div>
               <div class="trf-ex-grid">
                 <div class="field">
                   <label>Hari</label>
-                  <app-select [options]="weekdayOptions" [ngModel]="r.weekday" (ngModelChange)="setRitual(i, { weekday: $event })" ariaLabel="Hari ritual" />
+                  <app-select [options]="weekdayOptions" [ngModel]="r.weekday" (ngModelChange)="setRitual(i, { weekday: $event })" ariaLabel="Hari kegiatan" />
                 </div>
                 <div class="field">
                   <label>Jam mulai</label>
-                  <app-time-picker [value]="r.start" (valueChange)="setRitual(i, { start: $event })" ariaLabel="Jam mulai ritual" />
+                  <app-time-picker [value]="r.start" (valueChange)="setRitual(i, { start: $event })" ariaLabel="Jam mulai kegiatan" />
                 </div>
                 <div class="field">
                   <label>Durasi (menit)</label>
-                  <input type="number" min="1" [max]="maxMinutes" [ngModel]="r.minutes" (ngModelChange)="setRitual(i, { minutes: $event })" (blur)="setRitual(i, { minutes: clampedMinutes(r.minutes) })" aria-label="Durasi ritual (menit)" />
+                  <input type="number" min="1" [max]="maxMinutes" [ngModel]="r.minutes" (ngModelChange)="setRitual(i, { minutes: $event })" (blur)="setRitual(i, { minutes: clampedMinutes(r.minutes) })" aria-label="Durasi kegiatan (menit)" />
                 </div>
                 <div class="field">
                   <label>Frekuensi</label>
-                  <app-select [options]="frequencyOptions" [ngModel]="r.frequency" (ngModelChange)="setRitual(i, { frequency: $event })" ariaLabel="Frekuensi ritual" />
+                  <app-select [options]="frequencyOptions" [ngModel]="r.frequency" (ngModelChange)="setRitual(i, { frequency: $event })" ariaLabel="Frekuensi kegiatan" />
                 </div>
                 @if (r.frequency === 'sprint_week') {
                   <div class="field">
@@ -342,7 +342,7 @@
               </p>
             </div>
           } @empty {
-            <p class="trf-empty" data-no-rituals>Belum ada ritual khusus yang ditambahkan.</p>
+            <p class="trf-empty" data-no-rituals>Belum ada kegiatan khusus yang ditambahkan.</p>
           }
         </div>
         @if (fieldErrors().excluded) {
