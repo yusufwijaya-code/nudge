@@ -9,6 +9,7 @@ import (
 
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_middleware"
+	"nudge/modules/jira_credential/jira_credential_dto"
 )
 
 type Handler struct{ api API }
@@ -21,6 +22,8 @@ func AdminRoutes(g *gin.RouterGroup, h *Handler) {
 	g.GET("/jira-account", h.status)
 	g.POST("/jira-account/test", h.test)
 	g.PUT("/jira-account", h.save)
+	g.PUT("/jira-account/expiry", h.saveExpiry)
+	g.GET("/jira-account/expiring-users", h.expiringUsers)
 	g.DELETE("/jira-account", h.reset)
 }
 
@@ -50,6 +53,12 @@ func (h *Handler) test(c *gin.Context) {
 type saveRequest struct {
 	Email    string `json:"email"`
 	APIToken string `json:"apiToken"`
+	// ExpiresAt is "YYYY-MM-DD" (the date Atlassian shows) or empty = unknown.
+	ExpiresAt string `json:"expiresAt"`
+}
+
+type expiryRequest struct {
+	ExpiresAt string `json:"expiresAt"`
 }
 
 func (h *Handler) save(c *gin.Context) {
@@ -60,12 +69,14 @@ func (h *Handler) save(c *gin.Context) {
 		return
 	}
 	editor := c.MustGet(auth_middleware.CurrentUserKey).(auth_dto.Session).Email
-	who, err := h.api.Save(c.Request.Context(), req.Email, req.APIToken, editor)
+	who, err := h.api.Save(c.Request.Context(), req.Email, req.APIToken, req.ExpiresAt, editor)
 	switch {
 	case err == nil:
 		c.JSON(http.StatusOK, gin.H{"ok": true, "account": who})
 	case errors.Is(err, ErrInvalidInput):
 		c.JSON(http.StatusBadRequest, gin.H{"error": "email dan API token wajib diisi"})
+	case errors.Is(err, jira_credential_dto.ErrInvalidExpiry):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tanggal kedaluwarsa tidak valid"})
 	case errors.Is(err, ErrEncryptionKeyNotConfigured):
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "CREDENTIAL_ENCRYPTION_KEY belum diatur di server, token belum bisa disimpan"})
 	case errors.Is(err, ErrRejected):
@@ -74,6 +85,39 @@ func (h *Handler) save(c *gin.Context) {
 		log.Printf("jira_account: save failed: %v", err)
 		c.JSON(http.StatusBadGateway, gin.H{"error": "belum bisa menghubungi Jira untuk memverifikasi, akun lama tetap dipakai"})
 	}
+}
+
+func (h *Handler) saveExpiry(c *gin.Context) {
+	var req expiryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "expiresAt wajib ada"})
+		return
+	}
+	editor := c.MustGet(auth_middleware.CurrentUserKey).(auth_dto.Session).Email
+	switch err := h.api.SetExpiry(c.Request.Context(), req.ExpiresAt, editor); {
+	case err == nil:
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	case errors.Is(err, jira_credential_dto.ErrInvalidExpiry):
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tanggal kedaluwarsa tidak valid"})
+	default:
+		log.Printf("jira_account: saving the expiry failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal menyimpan tanggal kedaluwarsa"})
+	}
+}
+
+// expiringUsers feeds the admin banner: users whose personal Jira token
+// expires soon or already has.
+func (h *Handler) expiringUsers(c *gin.Context) {
+	users, err := h.api.ExpiringUsers(c.Request.Context())
+	if err != nil {
+		log.Printf("jira_account: listing expiring tokens failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "gagal memuat token user"})
+		return
+	}
+	if users == nil {
+		users = []ExpiringUser{}
+	}
+	c.JSON(http.StatusOK, gin.H{"users": users, "warnDays": ExpiryWarnDays})
 }
 
 func (h *Handler) reset(c *gin.Context) {

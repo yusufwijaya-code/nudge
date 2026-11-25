@@ -22,6 +22,15 @@ export interface JiraAccountStatus {
   updatedDate?: string;
   /** False when the server has no CREDENTIAL_ENCRYPTION_KEY: a token cannot be stored. */
   encryptionReady: boolean;
+  /** Day the token in force expires ("YYYY-MM-DD"), entered by an admin because Jira does not report it; "" = unknown. */
+  expiresAt: string;
+}
+
+/** A user whose personal Jira token expires soon (or already has). */
+export interface ExpiringUser {
+  name: string;
+  email: string;
+  expiresAt: string;
 }
 
 export type JiraAccountCheck = { ok: true; account: JiraIdentity } | { ok: false; message: string };
@@ -40,9 +49,19 @@ export class JiraAccountService {
     return this.http.post<JiraAccountCheck>(`${this.base}/test`, {});
   }
 
-  /** Verified against Jira, stored encrypted and in force at once. */
-  save(email: string, apiToken: string): Observable<{ ok: true; account: JiraIdentity }> {
-    return this.http.put<{ ok: true; account: JiraIdentity }>(this.base, { email, apiToken });
+  /** Verified against Jira, stored encrypted and in force at once; expiresAt is the date Atlassian shows for the token. */
+  save(email: string, apiToken: string, expiresAt = ''): Observable<{ ok: true; account: JiraIdentity }> {
+    return this.http.put<{ ok: true; account: JiraIdentity }>(this.base, { email, apiToken, expiresAt });
+  }
+
+  /** Changes only the expiry day of the token in force ("" forgets it). */
+  setExpiry(expiresAt: string): Observable<{ ok: true }> {
+    return this.http.put<{ ok: true }>(`${this.base}/expiry`, { expiresAt });
+  }
+
+  /** Users whose personal token expires within the warning window or already has. */
+  expiringUsers(): Observable<{ users: ExpiringUser[]; warnDays: number }> {
+    return this.http.get<{ users: ExpiringUser[]; warnDays: number }>(`${this.base}/expiring-users`);
   }
 
   /** Removes the saved account: the server's env credential is used again. */

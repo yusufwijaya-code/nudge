@@ -43,8 +43,18 @@ describe('AdminUserSettingsApi', () => {
 
     api.saveCredential('a@esb.co.id', 'tok').subscribe();
     const cred = http.expectOne((r) => r.method === 'PUT' && r.url === `${API}/credential`);
-    expect(cred.request.body).toEqual({ jiraEmail: 'a@esb.co.id', apiToken: 'tok' });
+    expect(cred.request.body).toEqual({ jiraEmail: 'a@esb.co.id', apiToken: 'tok', expiresAt: '' });
     cred.flush({ status: 'ok' });
+
+    api.saveCredential('a@esb.co.id', 'tok', '2027-10-26').subscribe();
+    const dated = http.expectOne((r) => r.method === 'PUT' && r.url === `${API}/credential`);
+    expect(dated.request.body.expiresAt).toBe('2027-10-26');
+    dated.flush({ status: 'ok' });
+
+    api.saveCredentialExpiry('2027-01-15').subscribe();
+    const expiry = http.expectOne((r) => r.method === 'PUT' && r.url === `${API}/credential/expiry`);
+    expect(expiry.request.body).toEqual({ expiresAt: '2027-01-15' });
+    expiry.flush({ status: 'ok', expiresAt: '2027-01-15' });
 
     api.deleteCredential().subscribe();
     http.expectOne((r) => r.method === 'DELETE' && r.url === '/dashboard/admin/users/12/credential').flush({ status: 'ok' });

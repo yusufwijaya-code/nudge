@@ -19,6 +19,16 @@
       <dl class="ja-facts">
         <div><dt>Email</dt><dd data-email>{{ status.email }}</dd></div>
         <div><dt>Token</dt><dd><code data-hint>{{ status.tokenHint }}</code></dd></div>
+        <div>
+          <dt>Berlaku sampai</dt>
+          <dd data-expiry>
+            @if (status.expiresAt) {
+              <span class="expiry-pill" [class]="'expiry-pill ' + expiry.level" data-expiry-pill>{{ expiryDateLabel(status.expiresAt) }} · {{ expiryDistance(expiry.daysLeft ?? 0) }}</span>
+            } @else {
+              <span class="expiry-pill" data-expiry-unknown>Belum diisi</span>
+            }
+          </dd>
+        </div>
         @if (status.source === 'database' && status.updatedBy) {
           <div>
             <dt>Terakhir diubah</dt>
@@ -45,6 +55,20 @@
           <app-icon name="refresh" [size]="14" /> Uji koneksi
         </button>
       </div>
+
+      <div class="expiry-edit ja-expiry">
+        <div class="field">
+          <label for="ja-expiry-edit">Tanggal kedaluwarsa token</label>
+          <input id="ja-expiry-edit" type="date" [value]="expiryValue" (input)="onExpiryInput($event)" />
+        </div>
+        <button type="button" class="btn btn-ghost" [class.loading]="savingExpiry" [disabled]="savingExpiry" (click)="onSaveExpiry()" data-save-expiry>
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn-label"><app-icon name="check" [size]="16" /> Simpan tanggal</span>
+        </button>
+      </div>
+      @if (!status.expiresAt) {
+        <p class="ja-hint" data-expiry-hint><app-icon name="info" [size]="14" /> Isi tanggalnya (lihat kolom <strong>Expires</strong> di halaman API tokens Atlassian) supaya Nudge bisa mengingatkan sebelum token habis.</p>
+      }
 
       @if (status.source === 'database') {
         <div class="card-footer">
@@ -101,6 +125,12 @@
         @if (error) {
           <p class="msg error" data-save-error><app-icon name="alert-circle" [size]="16" /> {{ error }}</p>
         }
+
+        <div class="field">
+          <label for="ja-expiry">Berlaku sampai</label>
+          <input id="ja-expiry" name="expiresAt" type="date" [(ngModel)]="newExpiresAt" [attr.disabled]="locked ? '' : null" />
+          <small class="ja-field-hint">Tanggal di kolom <strong>Expires</strong> pada halaman API tokens Atlassian. Wajib diisi agar bisa diingatkan sebelum token habis.</small>
+        </div>
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary" [class.loading]="saving" [disabled]="!canSave" data-save>

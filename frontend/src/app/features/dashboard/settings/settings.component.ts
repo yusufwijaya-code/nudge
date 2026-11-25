@@ -23,6 +23,7 @@ import { TimePickerComponent } from '../../../shared/ui/time-picker.component';
 import { IconComponent } from '../../../shared/ui/icon.component';
 import { SegIndicatorDirective } from '../../../shared/ui/seg-indicator.directive';
 import { JiraCredentialComponent } from './jira-credential.component';
+import { MyJiraTokenService } from '../../../core/services/my-jira-token.service';
 import { MutePanelComponent, activeUntil, formatWib } from './mute-panel.component';
 import { TierPickerComponent } from './tier-picker.component';
 import { ChatSenderCardComponent } from './chat-sender-card.component';
@@ -94,6 +95,7 @@ export class SettingsComponent {
   protected error: string | null = null;
   protected hasCredential = false;
   protected credentialMasked: string | null = null;
+  protected credentialExpiresAt = '';
 
   protected draft = signal<NotificationSettings | null>(null);
   /** The settings as last loaded / saved — the base each card's save starts from. */
@@ -159,6 +161,7 @@ export class SettingsComponent {
   protected boardContext = inject(SettingsScope);
   /** An admin editing another user (Admin › User detail). */
   protected readonly isAdminMode = inject(SETTINGS_MODE) === 'admin';
+  private readonly myJiraToken = inject(MyJiraTokenService);
   private confirm = inject(ConfirmService);
   private toast = inject(ToastService);
   /** The caller's master on/off switch (not shown in admin mode). */
@@ -410,6 +413,7 @@ export class SettingsComponent {
         }
         this.hasCredential = res.credential.hasCredential;
         this.credentialMasked = res.credential.maskedPreview;
+        this.credentialExpiresAt = res.credential.expiresAt ?? '';
         this.loading = false;
         this.playBoardIn();
         this.endSwitch();
@@ -567,6 +571,8 @@ export class SettingsComponent {
 
   protected onCredentialChanged(): void {
     this.loadSettings(this.scopeBoardId());
+    // The expiry banner in the shell follows the caller's own token only.
+    if (!this.isAdminMode) this.myJiraToken.refresh();
   }
 
   /** "Kembalikan ke default" for a board outside the active sprints. */

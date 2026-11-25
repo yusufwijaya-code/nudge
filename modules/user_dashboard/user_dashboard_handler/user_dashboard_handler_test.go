@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"nudge/modules/board/board_service"
+	"nudge/modules/jira_credential/jira_credential_dto"
 	"nudge/modules/user_setting/user_setting_service"
 	"strings"
 	"testing"
@@ -129,6 +130,8 @@ func (f *fakeChatInteractiveForHandler) Action(ctx context.Context, senderEmail,
 type fakeJiraCredentialForHandler struct {
 	upsertErr     error
 	upsertCalled  bool
+	expirySet     bool
+	expiryValue   *time.Time
 	deleteCalled  bool
 	maskedPreview string
 	maskedFound   bool
@@ -144,6 +147,16 @@ func (f *fakeJiraCredentialForHandler) UpsertCredential(ctx context.Context, use
 func (f *fakeJiraCredentialForHandler) DeleteCredential(ctx context.Context, userID int64) error {
 	f.deleteCalled = true
 	return nil
+}
+func (f *fakeJiraCredentialForHandler) SetExpiry(ctx context.Context, userID int64, expiresAt *time.Time) error {
+	f.expirySet, f.expiryValue = true, expiresAt
+	return nil
+}
+func (f *fakeJiraCredentialForHandler) Expiry(ctx context.Context, userID int64) (*time.Time, error) {
+	return f.expiryValue, nil
+}
+func (f *fakeJiraCredentialForHandler) ListExpiring(ctx context.Context, within time.Duration) ([]jira_credential_dto.ExpiringRecord, error) {
+	return nil, nil
 }
 func (f *fakeJiraCredentialForHandler) MaskedPreview(ctx context.Context, userID int64) (string, bool, error) {
 	return f.maskedPreview, f.maskedFound, nil
@@ -1060,5 +1073,88 @@ func TestTransitionTicket_TargetFieldsRequiredIs422(t *testing.T) {
 	handler.TransitionTicket(c)
 	if w.Code != http.StatusUnprocessableEntity || !strings.Contains(w.Body.String(), `"fields_required"`) {
 		t.Errorf("got %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSaveCredential_StoresTheExpiryDateOfTheNewToken(t *testing.T) {
+	cred := &fakeJiraCredentialForHandler{}
+	handler := NewUserDashboardHandler(&fakeUserDashboardService{}, &fakeChatInteractiveForHandler{}, cred, &fakeUserSettingsForHandler{}, nil)
+
+	w, c := newTestContextWithUser("POST", "/api/dashboard/credential", `{"jiraEmail":"dev@esb.co.id","apiToken":"tok","expiresAt":"2027-10-26"}`)
+	handler.SaveCredential(c)
+
+	if w.Code != http.StatusOK || !cred.expirySet || cred.expiryValue == nil || cred.expiryValue.Format("2006-01-02") != "2027-10-26" {
+		t.Errorf("status=%d expirySet=%v expiry=%v, want 200 and 2027-10-26", w.Code, cred.expirySet, cred.expiryValue)
+	}
+}
+
+// A new token is a different token: without a date, the old one is forgotten.
+func TestSaveCredential_WithoutADateForgetsTheOldTokensDate(t *testing.T) {
+	cred := &fakeJiraCredentialForHandler{}
+	handler := NewUserDashboardHandler(&fakeUserDashboardService{}, &fakeChatInteractiveForHandler{}, cred, &fakeUserSettingsForHandler{}, nil)
+
+	w, c := newTestContextWithUser("POST", "/api/dashboard/credential", `{"jiraEmail":"dev@esb.co.id","apiToken":"tok"}`)
+	handler.SaveCredential(c)
+
+	if w.Code != http.StatusOK || !cred.expirySet || cred.expiryValue != nil {
+		t.Errorf("status=%d expirySet=%v expiry=%v, want 200 and a cleared date", w.Code, cred.expirySet, cred.expiryValue)
+	}
+}
+
+func TestSaveCredential_RefusesABadDateBeforeStoringAnything(t *testing.T) {
+	cred := &fakeJiraCredentialForHandler{}
+	handler := NewUserDashboardHandler(&fakeUserDashboardService{}, &fakeChatInteractiveForHandler{}, cred, &fakeUserSettingsForHandler{}, nil)
+
+	w, c := newTestContextWithUser("POST", "/api/dashboard/credential", `{"jiraEmail":"dev@esb.co.id","apiToken":"tok","expiresAt":"besok"}`)
+	handler.SaveCredential(c)
+
+	if w.Code != http.StatusBadRequest || cred.upsertCalled || cred.expirySet {
+		t.Errorf("status=%d upsert=%v expirySet=%v, want 400 and nothing stored", w.Code, cred.upsertCalled, cred.expirySet)
+	}
+}
+
+func TestSaveCredentialExpiry_ChangesOnlyTheDate(t *testing.T) {
+	cred := &fakeJiraCredentialForHandler{maskedPreview: "••••ab3f", maskedFound: true}
+	handler := NewUserDashboardHandler(&fakeUserDashboardService{}, &fakeChatInteractiveForHandler{}, cred, &fakeUserSettingsForHandler{}, nil)
+
+	w, c := newTestContextWithUser("PUT", "/api/dashboard/credential/expiry", `{"expiresAt":"2027-01-15"}`)
+	handler.SaveCredentialExpiry(c)
+
+	if w.Code != http.StatusOK || cred.upsertCalled || !cred.expirySet || cred.expiryValue.Format("2006-01-02") != "2027-01-15" {
+		t.Errorf("status=%d upsert=%v expiry=%v", w.Code, cred.upsertCalled, cred.expiryValue)
+	}
+	if !strings.Contains(w.Body.String(), `"expiresAt":"2027-01-15"`) {
+		t.Errorf("body = %s", w.Body.String())
+	}
+}
+
+func TestSaveCredentialExpiry_NeedsASavedCredentialAndAValidDate(t *testing.T) {
+	none := &fakeJiraCredentialForHandler{}
+	handler := NewUserDashboardHandler(&fakeUserDashboardService{}, &fakeChatInteractiveForHandler{}, none, &fakeUserSettingsForHandler{}, nil)
+	w, c := newTestContextWithUser("PUT", "/api/dashboard/credential/expiry", `{"expiresAt":"2027-01-15"}`)
+	handler.SaveCredentialExpiry(c)
+	if w.Code != http.StatusNotFound || none.expirySet {
+		t.Errorf("without a credential: status=%d expirySet=%v, want 404 and nothing stored", w.Code, none.expirySet)
+	}
+
+	have := &fakeJiraCredentialForHandler{maskedFound: true}
+	handler = NewUserDashboardHandler(&fakeUserDashboardService{}, &fakeChatInteractiveForHandler{}, have, &fakeUserSettingsForHandler{}, nil)
+	w, c = newTestContextWithUser("PUT", "/api/dashboard/credential/expiry", `{"expiresAt":"2027-02-31"}`)
+	handler.SaveCredentialExpiry(c)
+	if w.Code != http.StatusBadRequest || have.expirySet {
+		t.Errorf("bad date: status=%d expirySet=%v, want 400", w.Code, have.expirySet)
+	}
+}
+
+func TestGetSettings_ReportsTheTokenExpiryDayForTheBanner(t *testing.T) {
+	day := time.Date(2026, 11, 30, 0, 0, 0, 0, time.FixedZone("WIB", 7*3600))
+	cred := &fakeJiraCredentialForHandler{maskedPreview: "••••ab3f", maskedFound: true, expiryValue: &day}
+	handler := NewUserDashboardHandler(&fakeUserDashboardService{}, &fakeChatInteractiveForHandler{}, cred, &fakeUserSettingsForHandler{setting: user_setting_dto.Default()}, nil)
+
+	w, c := newTestContextWithUser("GET", "/api/dashboard/settings", "")
+	handler.GetSettings(c)
+
+	if !strings.Contains(w.Body.String(), `"expiresAt":"2026-11-30"`) {
+		t.Errorf("body missing the expiry day: %s", w.Body.String())
 	}
 }

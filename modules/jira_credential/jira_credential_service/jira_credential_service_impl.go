@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
 
 	"nudge/config"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/jira_credential/jira_credential_crypto"
+	"nudge/modules/jira_credential/jira_credential_dto"
 	"nudge/modules/jira_credential/jira_credential_repository"
 	"nudge/modules/registration/registration_repository"
 )
@@ -92,6 +94,22 @@ func (s *jiraCredentialServiceImpl) UpsertCredential(ctx context.Context, userID
 		return err
 	}
 	return s.repo.Upsert(ctx, userID, jiraEmail, encrypted)
+}
+
+func (s *jiraCredentialServiceImpl) SetExpiry(ctx context.Context, userID int64, expiresAt *time.Time) error {
+	return s.repo.SetExpiry(ctx, userID, expiresAt)
+}
+
+func (s *jiraCredentialServiceImpl) Expiry(ctx context.Context, userID int64) (*time.Time, error) {
+	record, found, err := s.repo.FindByUserID(ctx, userID)
+	if err != nil || !found {
+		return nil, err
+	}
+	return record.ExpiresAt, nil
+}
+
+func (s *jiraCredentialServiceImpl) ListExpiring(ctx context.Context, within time.Duration) ([]jira_credential_dto.ExpiringRecord, error) {
+	return s.repo.ListExpiringBefore(ctx, time.Now().Add(within))
 }
 
 func (s *jiraCredentialServiceImpl) DeleteCredential(ctx context.Context, userID int64) error {

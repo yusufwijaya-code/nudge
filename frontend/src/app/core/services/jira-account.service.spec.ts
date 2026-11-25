@@ -35,9 +35,31 @@ describe('JiraAccountService', () => {
     service.save('bot@esb.co.id', 'secret').subscribe();
     const req = http.expectOne(url());
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ email: 'bot@esb.co.id', apiToken: 'secret' });
+    expect(req.request.body).toEqual({ email: 'bot@esb.co.id', apiToken: 'secret', expiresAt: '' });
     expect(req.request.url).not.toContain('secret');
     req.flush({ ok: true, account: { displayName: 'Bot', emailAddress: 'bot@esb.co.id', accountId: 'y', active: true } });
+  });
+
+  it('sends the expiry day with the token', () => {
+    service.save('bot@esb.co.id', 'secret', '2027-10-26').subscribe();
+    const req = http.expectOne(url());
+    expect(req.request.body).toEqual({ email: 'bot@esb.co.id', apiToken: 'secret', expiresAt: '2027-10-26' });
+    req.flush({ ok: true, account: { displayName: 'Bot', emailAddress: 'bot@esb.co.id', accountId: 'y', active: true } });
+  });
+
+  it('changes only the expiry day with PUT /expiry', () => {
+    service.setExpiry('2027-10-26').subscribe();
+    const req = http.expectOne(url('/expiry'));
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ expiresAt: '2027-10-26' });
+    req.flush({ ok: true });
+  });
+
+  it('lists the users whose token expires soon', () => {
+    service.expiringUsers().subscribe((r) => expect(r.users.length).toBe(1));
+    const req = http.expectOne(url('/expiring-users'));
+    expect(req.request.method).toBe('GET');
+    req.flush({ users: [{ name: 'Keva', email: 'keva.galih@esb.co.id', expiresAt: '2026-11-30' }], warnDays: 14 });
   });
 
   it('resets with DELETE', () => {

@@ -12,23 +12,33 @@ import (
 
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_middleware"
+	"nudge/modules/jira_credential/jira_credential_dto"
 )
 
 type fakeAPI struct {
-	status    Status
-	testWho   Identity
-	testErr   error
-	saveErr   error
-	resetErr  error
-	gotEmail  string
-	gotToken  string
-	gotEditor string
+	expiryErr  error
+	gotExpiry  string
+	gotSaveExp string
+	expiring   []ExpiringUser
+	status     Status
+	testWho    Identity
+	testErr    error
+	saveErr    error
+	resetErr   error
+	gotEmail   string
+	gotToken   string
+	gotEditor  string
 }
 
 func (f *fakeAPI) Status(context.Context) (Status, error) { return f.status, nil }
 func (f *fakeAPI) Test(context.Context) (Identity, error) { return f.testWho, f.testErr }
-func (f *fakeAPI) Save(_ context.Context, email, token, editor string) (Identity, error) {
-	f.gotEmail, f.gotToken, f.gotEditor = email, token, editor
+func (f *fakeAPI) SetExpiry(_ context.Context, expiresAt, editor string) error {
+	f.gotExpiry, f.gotEditor = expiresAt, editor
+	return f.expiryErr
+}
+func (f *fakeAPI) ExpiringUsers(context.Context) ([]ExpiringUser, error) { return f.expiring, nil }
+func (f *fakeAPI) Save(_ context.Context, email, token, expiresAt, editor string) (Identity, error) {
+	f.gotEmail, f.gotToken, f.gotSaveExp, f.gotEditor = email, token, expiresAt, editor
 	return Identity{DisplayName: "Bot"}, f.saveErr
 }
 func (f *fakeAPI) Reset(context.Context) error { return f.resetErr }
@@ -73,6 +83,7 @@ func TestSave_PassesTheEditorAndMapsEveryOutcome(t *testing.T) {
 	}{
 		{"saved", nil, http.StatusOK},
 		{"empty input", ErrInvalidInput, http.StatusBadRequest},
+		{"bad date", jira_credential_dto.ErrInvalidExpiry, http.StatusBadRequest},
 		{"no encryption key", ErrEncryptionKeyNotConfigured, http.StatusServiceUnavailable},
 		{"Jira says no", ErrRejected, http.StatusUnprocessableEntity},
 		{"Jira unreachable", context.DeadlineExceeded, http.StatusBadGateway},
@@ -80,12 +91,15 @@ func TestSave_PassesTheEditorAndMapsEveryOutcome(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			api := &fakeAPI{saveErr: c.err}
-			w := serve(api, http.MethodPut, "/api/dashboard/admin/jira-account", `{"email":"bot@esb.co.id","apiToken":"tok"}`)
+			w := serve(api, http.MethodPut, "/api/dashboard/admin/jira-account", `{"email":"bot@esb.co.id","apiToken":"tok","expiresAt":"2027-10-26"}`)
 			if w.Code != c.code {
 				t.Errorf("code = %d, want %d (%s)", w.Code, c.code, w.Body.String())
 			}
 			if api.gotEmail != "bot@esb.co.id" || api.gotToken != "tok" || api.gotEditor != "admin@esb.co.id" {
 				t.Errorf("service got %q / %q / %q", api.gotEmail, api.gotToken, api.gotEditor)
+			}
+			if api.gotSaveExp != "2027-10-26" {
+				t.Errorf("service got expiry %q", api.gotSaveExp)
 			}
 			if strings.Contains(w.Body.String(), "tok\"") && c.err != nil {
 				t.Errorf("an error response must not echo the token: %s", w.Body.String())
@@ -115,5 +129,44 @@ func TestTest_ReportsTheAccountOrTheReason(t *testing.T) {
 func TestReset_ReturnsNoContent(t *testing.T) {
 	if w := serve(&fakeAPI{}, http.MethodDelete, "/api/dashboard/admin/jira-account", ""); w.Code != http.StatusNoContent {
 		t.Errorf("code = %d", w.Code)
+	}
+}
+
+func TestSaveExpiry_PassesTheDateAndMapsEveryOutcome(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		code int
+	}{
+		{"saved", nil, http.StatusOK},
+		{"bad date", jira_credential_dto.ErrInvalidExpiry, http.StatusBadRequest},
+		{"storage failed", context.DeadlineExceeded, http.StatusInternalServerError},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			api := &fakeAPI{expiryErr: c.err}
+			w := serve(api, http.MethodPut, "/api/dashboard/admin/jira-account/expiry", `{"expiresAt":"2027-10-26"}`)
+			if w.Code != c.code {
+				t.Errorf("code = %d, want %d (%s)", w.Code, c.code, w.Body.String())
+			}
+			if api.gotExpiry != "2027-10-26" || api.gotEditor != "admin@esb.co.id" {
+				t.Errorf("service got %q by %q", api.gotExpiry, api.gotEditor)
+			}
+		})
+	}
+	if w := serve(&fakeAPI{}, http.MethodPut, "/api/dashboard/admin/jira-account/expiry", `nope`); w.Code != http.StatusBadRequest {
+		t.Errorf("non-JSON body: code = %d", w.Code)
+	}
+}
+
+func TestExpiringUsers_ReturnsAnEmptyListNotNull(t *testing.T) {
+	w := serve(&fakeAPI{}, http.MethodGet, "/api/dashboard/admin/jira-account/expiring-users", "")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"users":[]`) || !strings.Contains(w.Body.String(), `"warnDays":14`) {
+		t.Errorf("empty = %d %s", w.Code, w.Body.String())
+	}
+	api := &fakeAPI{expiring: []ExpiringUser{{Name: "Keva", Email: "keva.galih@esb.co.id", ExpiresAt: "2026-11-30"}}}
+	w = serve(api, http.MethodGet, "/api/dashboard/admin/jira-account/expiring-users", "")
+	if !strings.Contains(w.Body.String(), "keva.galih@esb.co.id") || !strings.Contains(w.Body.String(), "2026-11-30") {
+		t.Errorf("list = %s", w.Body.String())
 	}
 }

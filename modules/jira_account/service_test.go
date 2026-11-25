@@ -11,9 +11,12 @@ import (
 	"nudge/config"
 	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_credential/jira_credential_crypto"
+	"nudge/modules/jira_credential/jira_credential_dto"
 )
 
 type fakeRepo struct {
+	expiry     *time.Time
+	expiryBy   string
 	rec        *Record
 	saveCalls  int
 	deleteErr  error
@@ -30,6 +33,11 @@ func (f *fakeRepo) Save(_ context.Context, r Record) error {
 	}
 	r.UpdatedDate = time.Date(2026, 11, 25, 21, 0, 0, 0, time.UTC)
 	f.rec = &r
+	return nil
+}
+func (f *fakeRepo) FindExpiry(context.Context) (*time.Time, error) { return f.expiry, nil }
+func (f *fakeRepo) SaveExpiry(_ context.Context, day *time.Time, editor string) error {
+	f.expiry, f.expiryBy = day, editor
 	return nil
 }
 func (f *fakeRepo) Delete(context.Context) error {
@@ -68,7 +76,7 @@ func TestSave_StoresTheTokenEncryptedAndSwitchesEveryClientAtOnce(t *testing.T) 
 	repo, checker := &fakeRepo{}, &fakeChecker{who: Identity{DisplayName: "Bot Nudge", EmailAddress: "bot@esb.co.id", Active: true}}
 	svc := newService(t, testKey, repo, checker)
 
-	who, err := svc.Save(context.Background(), "  bot@esb.co.id ", " new-secret-token ", "admin@esb.co.id")
+	who, err := svc.Save(context.Background(), "  bot@esb.co.id ", " new-secret-token ", "", "admin@esb.co.id")
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -96,7 +104,7 @@ func TestSave_NeverStoresOrSwitchesToACredentialJiraRejects(t *testing.T) {
 	repo, checker := &fakeRepo{}, &fakeChecker{err: ErrRejected}
 	svc := newService(t, testKey, repo, checker)
 
-	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "wrong", "admin@esb.co.id"); !errors.Is(err, ErrRejected) {
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "wrong", "", "admin@esb.co.id"); !errors.Is(err, ErrRejected) {
 		t.Fatalf("err = %v, want ErrRejected", err)
 	}
 	if repo.saveCalls != 0 {
@@ -110,12 +118,12 @@ func TestSave_NeverStoresOrSwitchesToACredentialJiraRejects(t *testing.T) {
 func TestSave_RejectsEmptyOrMalformedInputAndAMissingKey(t *testing.T) {
 	svc := newService(t, testKey, &fakeRepo{}, &fakeChecker{})
 	for _, c := range [][2]string{{"", "t"}, {"bot@esb.co.id", ""}, {"not-an-email", "t"}, {"  ", "  "}} {
-		if _, err := svc.Save(context.Background(), c[0], c[1], "a"); !errors.Is(err, ErrInvalidInput) {
+		if _, err := svc.Save(context.Background(), c[0], c[1], "", "a"); !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("Save(%q, %q) err = %v, want ErrInvalidInput", c[0], c[1], err)
 		}
 	}
 	noKey := newService(t, "", &fakeRepo{}, &fakeChecker{})
-	if _, err := noKey.Save(context.Background(), "bot@esb.co.id", "t", "a"); !errors.Is(err, ErrEncryptionKeyNotConfigured) {
+	if _, err := noKey.Save(context.Background(), "bot@esb.co.id", "t", "", "a"); !errors.Is(err, ErrEncryptionKeyNotConfigured) {
 		t.Errorf("err = %v, want ErrEncryptionKeyNotConfigured", err)
 	}
 }
@@ -162,7 +170,7 @@ func TestLoad_WithNothingSavedKeepsTheEnvCredential(t *testing.T) {
 func TestReset_GoesBackToTheEnvPair(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := newService(t, testKey, repo, &fakeChecker{who: Identity{}})
-	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok", "a"); err != nil {
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok", "", "a"); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if err := svc.Reset(context.Background()); err != nil {
@@ -188,7 +196,7 @@ func TestStatus_ShowsTheSourceAndOnlyTheLastFourOfTheToken(t *testing.T) {
 		t.Errorf("env status = %+v", st)
 	}
 
-	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "abcdefgh-WXYZ", "admin@esb.co.id"); err != nil {
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "abcdefgh-WXYZ", "", "admin@esb.co.id"); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	st, _ = svc.Status(context.Background())
@@ -210,5 +218,106 @@ func TestTest_ChecksTheCredentialInForce(t *testing.T) {
 	}
 	if checker.gotMail != "env@esb.co.id" || checker.gotTok != "env-token-1234" {
 		t.Errorf("checked %q / %q, want the env pair", checker.gotMail, checker.gotTok)
+	}
+}
+
+func TestSave_StoresTheExpiryAndANewTokenNeverKeepsTheOldDate(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := newService(t, testKey, repo, &fakeChecker{})
+
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok-1", "2027-10-26", "admin@esb.co.id"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if repo.expiry == nil || repo.expiry.Format("2006-01-02") != "2027-10-26" || repo.expiryBy != "admin@esb.co.id" {
+		t.Fatalf("expiry = %v by %q, want 2027-10-26 by admin", repo.expiry, repo.expiryBy)
+	}
+	st, _ := svc.Status(context.Background())
+	if st.ExpiresAt != "2027-10-26" {
+		t.Errorf("status expiresAt = %q", st.ExpiresAt)
+	}
+
+	// The next token is a different token: without a date, the old one goes.
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok-2", "", "admin@esb.co.id"); err != nil {
+		t.Fatalf("second Save: %v", err)
+	}
+	if repo.expiry != nil {
+		t.Errorf("expiry = %v, want it forgotten with the old token", repo.expiry)
+	}
+}
+
+func TestSave_RejectsABadExpiryBeforeStoringAnything(t *testing.T) {
+	repo := &fakeRepo{}
+	checker := &fakeChecker{}
+	svc := newService(t, testKey, repo, checker)
+	for _, bad := range []string{"26-10-2027", "2027-13-40", "soon", "2099-01-01", "2019-01-01"} {
+		if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok", bad, "a"); !errors.Is(err, jira_credential_dto.ErrInvalidExpiry) {
+			t.Errorf("Save(expiry %q) err = %v, want ErrInvalidExpiry", bad, err)
+		}
+	}
+	if repo.saveCalls != 0 || checker.gotMail != "" {
+		t.Error("a bad date must be refused before Jira is asked or anything is stored")
+	}
+}
+
+func TestSetExpiry_ChangesOnlyTheDateAndAcceptsAnAlreadyPastOne(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := newService(t, testKey, repo, &fakeChecker{})
+
+	if err := svc.SetExpiry(context.Background(), "2026-11-23", "admin@esb.co.id"); err != nil {
+		t.Fatalf("SetExpiry: %v", err)
+	}
+	if repo.expiry == nil || repo.saveCalls != 0 {
+		t.Errorf("expiry = %v, token saves = %d; want the date alone", repo.expiry, repo.saveCalls)
+	}
+	if err := svc.SetExpiry(context.Background(), "", "admin@esb.co.id"); err != nil || repo.expiry != nil {
+		t.Errorf("clearing: err = %v, expiry = %v", err, repo.expiry)
+	}
+	if err := svc.SetExpiry(context.Background(), "nope", "a"); !errors.Is(err, jira_credential_dto.ErrInvalidExpiry) {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestReset_ForgetsTheExpiryOfTheRemovedToken(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := newService(t, testKey, repo, &fakeChecker{})
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok", "2027-10-26", "a"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := svc.Reset(context.Background()); err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+	if repo.expiry != nil {
+		t.Errorf("expiry = %v after Reset, want none", repo.expiry)
+	}
+}
+
+type fakeExpiring struct {
+	records []jira_credential_dto.ExpiringRecord
+	within  time.Duration
+}
+
+func (f *fakeExpiring) ListExpiring(_ context.Context, within time.Duration) ([]jira_credential_dto.ExpiringRecord, error) {
+	f.within = within
+	return f.records, nil
+}
+
+func TestExpiringUsers_ListsThePersonalTokensWithinTheWarningWindow(t *testing.T) {
+	src := &fakeExpiring{records: []jira_credential_dto.ExpiringRecord{
+		{UserID: 3, UserName: "Keva", Email: "keva.galih@esb.co.id", ExpiresAt: time.Date(2026, 11, 30, 0, 0, 0, 0, time.FixedZone("WIB", 7*3600))},
+	}}
+	svc := newService(t, testKey, &fakeRepo{}, &fakeChecker{}).WithExpiringUsers(src)
+
+	users, err := svc.ExpiringUsers(context.Background())
+	if err != nil || len(users) != 1 {
+		t.Fatalf("ExpiringUsers = %+v, %v", users, err)
+	}
+	if users[0].Email != "keva.galih@esb.co.id" || users[0].Name != "Keva" || users[0].ExpiresAt != "2026-11-30" {
+		t.Errorf("user = %+v", users[0])
+	}
+	if src.within != ExpiryWarnDays*24*time.Hour {
+		t.Errorf("window = %v, want %d days", src.within, ExpiryWarnDays)
+	}
+	if none, err := newService(t, testKey, &fakeRepo{}, &fakeChecker{}).ExpiringUsers(context.Background()); err != nil || len(none) != 0 {
+		t.Errorf("without a source: %+v, %v", none, err)
 	}
 }

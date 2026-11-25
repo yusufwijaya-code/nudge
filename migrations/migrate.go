@@ -100,6 +100,12 @@ var trackingRuleCreateFieldsSQL string
 //go:embed 0023_jira_account.sql
 var jiraAccountSQL string
 
+//go:embed 0024_credential_expiry.sql
+var credentialExpirySQL string
+
+//go:embed 0024b_jira_account_expiry.sql
+var jiraAccountExpirySQL string
+
 // mysqlDeadlockErrNo / mysqlLockWaitTimeoutErrNo are retried: go test runs
 // every package in parallel and each one calls Apply against the same
 // schema, so concurrent DDL/backfill can collide. Every step is
@@ -219,6 +225,14 @@ func apply(db *sql.DB) error {
 	}
 	// Admin › Akun Jira — CREATE TABLE IF NOT EXISTS, idempotent.
 	if _, err := db.Exec(jiraAccountSQL); err != nil {
+		return err
+	}
+	// Jira token expiry (banner): one ADD COLUMN on the personal credentials,
+	// one table for the central account.
+	if err := addColumnIfNotExists(db, credentialExpirySQL); err != nil {
+		return err
+	}
+	if _, err := db.Exec(jiraAccountExpirySQL); err != nil {
 		return err
 	}
 	// The new toggle starts ON when either old toggle was ON — exactly once

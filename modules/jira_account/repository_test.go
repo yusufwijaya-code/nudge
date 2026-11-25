@@ -3,6 +3,7 @@ package jira_account
 import (
 	"context"
 	"testing"
+	"time"
 
 	"nudge/base/testutil"
 )
@@ -56,5 +57,40 @@ func TestRepository_SavesOneAccountAndOverwritesIt(t *testing.T) {
 	}
 	if rec, _ := repo.Find(ctx); rec != nil {
 		t.Errorf("Find after Delete = %+v, want nil", rec)
+	}
+}
+
+func TestRepository_ExpiryIsOneDayThatCanBeReplacedAndForgotten(t *testing.T) {
+	db := testutil.OpenTestDB(t)
+	repo := NewRepository(db)
+	ctx := context.Background()
+
+	prev, err := repo.FindExpiry(ctx)
+	if err != nil {
+		t.Fatalf("FindExpiry: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.SaveExpiry(ctx, prev, "test-cleanup") })
+	if err := repo.SaveExpiry(ctx, nil, "t"); err != nil {
+		t.Fatalf("SaveExpiry(nil): %v", err)
+	}
+	if day, err := repo.FindExpiry(ctx); err != nil || day != nil {
+		t.Fatalf("empty: FindExpiry = %v, %v; want nil", day, err)
+	}
+
+	first := time.Date(2027, 10, 26, 0, 0, 0, 0, time.FixedZone("WIB", 7*3600))
+	second := time.Date(2028, 1, 5, 0, 0, 0, 0, time.FixedZone("WIB", 7*3600))
+	if err := repo.SaveExpiry(ctx, &first, "admin1@esb.co.id"); err != nil {
+		t.Fatalf("SaveExpiry: %v", err)
+	}
+	if err := repo.SaveExpiry(ctx, &second, "admin2@esb.co.id"); err != nil {
+		t.Fatalf("second SaveExpiry: %v", err)
+	}
+	day, err := repo.FindExpiry(ctx)
+	if err != nil || day == nil || day.Format("2006-01-02") != "2028-01-05" {
+		t.Errorf("FindExpiry = %v, %v; want the second date", day, err)
+	}
+	var rows int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM ms_jira_account_expiry`).Scan(&rows); err != nil || rows != 1 {
+		t.Errorf("rows = %d, %v; want exactly one", rows, err)
 	}
 }

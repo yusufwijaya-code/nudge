@@ -7,9 +7,9 @@ import { JiraAccountService, JiraAccountStatus } from '../../../core/services/ji
 import { ConfirmService } from '../../../core/ui/confirm.service';
 import { ToastService } from '../../../core/ui/toast.service';
 
-const ENV: JiraAccountStatus = { source: 'env', email: 'yusuf.wijaya@esb.co.id', tokenHint: '••••••••abcd', encryptionReady: true };
+const ENV: JiraAccountStatus = { source: 'env', email: 'yusuf.wijaya@esb.co.id', tokenHint: '••••••••abcd', encryptionReady: true, expiresAt: '' };
 const SAVED: JiraAccountStatus = {
-  source: 'database', email: 'bot@esb.co.id', tokenHint: '••••••••WXYZ', encryptionReady: true,
+  source: 'database', email: 'bot@esb.co.id', tokenHint: '••••••••WXYZ', encryptionReady: true, expiresAt: '2099-12-31',
   updatedBy: 'yusuf.wijaya@esb.co.id', updatedDate: '2026-11-25T14:30:00Z',
 };
 const YUSUF = { displayName: 'Yusuf Wijaya', emailAddress: 'yusuf.wijaya@esb.co.id', accountId: 'acc-1', active: true };
@@ -28,14 +28,15 @@ describe('JiraAccountComponent', () => {
     fixture = TestBed.createComponent(JiraAccountComponent);
     fixture.detectChanges();
   };
-  const fill = (email: string, token: string) => {
+  const fill = (email: string, token: string, expiresAt = '2027-10-26') => {
     component().email = email;
     component().token = token;
+    component().newExpiresAt = expiresAt;
     fixture.detectChanges();
   };
 
   beforeEach(async () => {
-    api = jasmine.createSpyObj('JiraAccountService', ['status', 'test', 'save', 'reset']);
+    api = jasmine.createSpyObj('JiraAccountService', ['status', 'test', 'save', 'setExpiry', 'expiringUsers', 'reset']);
     api.test.and.returnValue(of({ ok: true, account: YUSUF }));
     confirm = jasmine.createSpyObj('ConfirmService', ['ask']);
     confirm.ask.and.resolveTo(true);
@@ -99,6 +100,9 @@ describe('JiraAccountComponent', () => {
     expect(save()).toBeTrue();
     fill('bot@esb.co.id', 'tok');
     expect(save()).toBeFalse();
+    // The date is what lets Nudge warn before the token runs out.
+    fill('bot@esb.co.id', 'tok', '');
+    expect(save()).toBeTrue();
   });
 
   it('saves after confirmation, clears the token and reloads the account', async () => {
@@ -111,7 +115,7 @@ describe('JiraAccountComponent', () => {
     await component().onSave();
 
     expect(confirm.ask).toHaveBeenCalled();
-    expect(api.save).toHaveBeenCalledWith('bot@esb.co.id', 'tok');
+    expect(api.save).toHaveBeenCalledWith('bot@esb.co.id', 'tok', '2027-10-26');
     expect(component().token).toBe('');
     expect(toast.success).toHaveBeenCalledWith('Akun Jira diganti', jasmine.stringContaining('Bot Nudge'));
     expect(api.status).toHaveBeenCalledTimes(1);
@@ -161,5 +165,55 @@ describe('JiraAccountComponent', () => {
     confirm.ask.and.resolveTo(false);
     await component().onReset();
     expect(api.reset).not.toHaveBeenCalled();
+  });
+
+  describe('Berlaku sampai (token expiry)', () => {
+    it('shows the date of the token in force and how close it is', () => {
+      create(SAVED);
+      const pill = q('[data-expiry-pill]') as HTMLElement;
+      expect(pill.textContent).toContain('31 Des 2099');
+      expect(pill.className).toContain('ok');
+      expect(q('[data-expiry-hint]')).toBeNull();
+    });
+
+    it('asks to fill the date in when it is unknown', () => {
+      create(ENV);
+      expect(q('[data-expiry-unknown]')?.textContent).toContain('Belum diisi');
+      expect(q('[data-expiry-hint]')?.textContent).toContain('Expires');
+    });
+
+    it('marks a date that is close or past', () => {
+      const day = (offset: number) => {
+        const d = new Date(Date.now() + offset * 86_400_000);
+        return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+      };
+      create({ ...SAVED, expiresAt: day(5) });
+      expect((q('[data-expiry-pill]') as HTMLElement).className).toContain('soon');
+      create({ ...SAVED, expiresAt: day(-3) });
+      expect((q('[data-expiry-pill]') as HTMLElement).className).toContain('expired');
+    });
+
+    it('changes only the date of the token in force, e.g. the env account', () => {
+      create(ENV);
+      api.setExpiry.and.returnValue(of({ ok: true }));
+      const input = q('#ja-expiry-edit') as HTMLInputElement;
+      input.value = '2027-10-26';
+      input.dispatchEvent(new Event('input'));
+      api.status.calls.reset();
+
+      (q('[data-save-expiry]') as HTMLButtonElement).click();
+
+      expect(api.setExpiry).toHaveBeenCalledWith('2027-10-26');
+      expect(api.save).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalled();
+      expect(api.status).toHaveBeenCalledTimes(1);
+    });
+
+    it('tells the admin when the date is refused', () => {
+      create(ENV);
+      api.setExpiry.and.returnValue(throwError(() => ({ status: 400 })));
+      (q('[data-save-expiry]') as HTMLButtonElement).click();
+      expect(toast.error).toHaveBeenCalledWith('Gagal menyimpan tanggal', 'Tanggal kedaluwarsa tidak valid.');
+    });
   });
 });
