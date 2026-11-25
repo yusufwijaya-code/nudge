@@ -26,6 +26,12 @@ type fakeJiraClientService struct {
 	issueStatusErr     error
 	// runStart / lastEntry, when set, drive GetTrackedRunTimes directly.
 	runStart, lastEntry time.Time
+	// closedSeconds is what the changelog says earlier (closed) runs add up to.
+	closedSeconds int64
+}
+
+func (f *fakeJiraClientService) GetClosedRunSeconds(ctx context.Context, issueKey string, elapsed func(start, end time.Time) int64) (int64, error) {
+	return f.closedSeconds, nil
 }
 
 func (f *fakeJiraClientService) SearchCodeProcessIssues(ctx context.Context) ([]jira_client_dto.Issue, error) {
@@ -103,8 +109,15 @@ func (f *fakeIssueSessionServiceForPoller) OpenOrResumeSession(ctx context.Conte
 
 func (f *fakeIssueSessionServiceForPoller) OpenOrResumeSessionAt(ctx context.Context, issueKey, projectKey string, sp float64, startedAt time.Time, assigneeEmail, issueSummary, sprintName string) error {
 	f.openAtCalls = append(f.openAtCalls, issueKey)
+	// Like the real upsert (ON DUPLICATE KEY UPDATE), an existing row keeps
+	// its accumulatedSeconds.
+	var accumulated int64
+	if prev, ok := f.sessions[issueKey]; ok {
+		accumulated = prev.AccumulatedSeconds
+	}
 	f.sessions[issueKey] = &issue_session_dto.IssueSession{
 		IssueKey: issueKey, ProjectKey: projectKey, StoryPoints: sp,
+		AccumulatedSeconds:        accumulated,
 		CurrentSessionStartedDate: &startedAt, FlagActive: true,
 		AssigneeEmail: assigneeEmail, IssueSummary: issueSummary,
 	}
@@ -147,6 +160,13 @@ func (f *fakeIssueSessionServiceForPoller) GetSessionByIssueKey(ctx context.Cont
 	}
 	cp := *s
 	return &cp, true, nil
+}
+
+func (f *fakeIssueSessionServiceForPoller) SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
+	if s, ok := f.sessions[issueKey]; ok {
+		s.AccumulatedSeconds = seconds
+	}
+	return nil
 }
 
 func (f *fakeIssueSessionServiceForPoller) UpdateLastOverageReminder(ctx context.Context, issueKey string) error {
@@ -825,7 +845,7 @@ func TestPollOnce_CoreTicketInReviewKeepsItsSessionOpen(t *testing.T) {
 	}
 }
 
-func TestPollOnce_NewSessionStartsAtRunStartReopenedAtLastEntry(t *testing.T) {
+func TestPollOnce_SessionsStartAtTheRunStart(t *testing.T) {
 	runStart := time.Date(2026, 11, 10, 9, 0, 0, 0, time.Local)
 	lastEntry := time.Date(2026, 11, 11, 14, 0, 0, 0, time.Local)
 
@@ -847,14 +867,63 @@ func TestPollOnce_NewSessionStartsAtRunStartReopenedAtLastEntry(t *testing.T) {
 				t.Fatalf("pollOnce: %v", err)
 			}
 			got := issueSession.sessions["CORE-1"].CurrentSessionStartedDate
-			want := runStart
-			if existed {
-				want = lastEntry
-			}
-			if got == nil || !got.Equal(want) {
-				t.Errorf("session started at %v, want %v", got, want)
+			if got == nil || !got.Equal(runStart) {
+				t.Errorf("session started at %v, want the run start %v", got, runStart)
 			}
 		})
+	}
+}
+
+// A session closed in the MIDDLE of a run (the assignee's account was deleted,
+// so the ticket left the tracked set) already holds the run's time up to the
+// close. Reopening it must not count that stretch a second time: the stored
+// time is rebuilt from the changelog's closed runs only (CORE-11738, 18 Nov).
+func TestPollOnce_ReopenedSessionDoesNotCountTheCurrentRunTwice(t *testing.T) {
+	runStart := time.Date(2026, 11, 18, 11, 22, 51, 0, time.Local)
+
+	cases := map[string]struct {
+		stored, fromChangelog, want int64
+	}{
+		"closed mid-run, no earlier run":       {stored: 1563, fromChangelog: 0, want: 0},
+		"closed mid-run, earlier run":          {stored: 3600 + 1563, fromChangelog: 3600, want: 3600},
+		"stale value is overwritten both ways": {stored: 0, fromChangelog: 900, want: 900},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			issue := assignedIssue("CORE-11738", "dev@esb.co.id", 4)
+			issueSession := newFakeIssueSessionServiceForPoller()
+			closed := activeSession("CORE-11738")
+			closed.FlagActive = false
+			closed.CurrentSessionStartedDate = nil
+			closed.AccumulatedSeconds = c.stored
+			issueSession.sessions["CORE-11738"] = closed
+			jiraClient := &fakeJiraClientService{issues: []jira_client_dto.Issue{issue}, runStart: runStart, lastEntry: runStart, closedSeconds: c.fromChangelog}
+			poller := newTestPoller(jiraClient, issueSession, &fakeReminderEngineService{}, newFakeRegistrationRepositoryForPoller("dev@esb.co.id"))
+
+			if err := poller.pollOnce(context.Background()); err != nil {
+				t.Fatalf("pollOnce: %v", err)
+			}
+			if got := issueSession.sessions["CORE-11738"].AccumulatedSeconds; got != c.want {
+				t.Errorf("accumulatedSeconds = %d, want %d (closed runs only)", got, c.want)
+			}
+		})
+	}
+}
+
+func TestPollOnce_NewSessionKeepsZeroAccumulated(t *testing.T) {
+	issue := assignedIssue("CORE-2", "dev@esb.co.id", 3)
+	issueSession := newFakeIssueSessionServiceForPoller()
+	runStart := time.Date(2026, 11, 10, 9, 0, 0, 0, time.Local)
+	// closedSeconds must be ignored: a brand-new session is rebuilt by the
+	// sprint backfill, not here.
+	jiraClient := &fakeJiraClientService{issues: []jira_client_dto.Issue{issue}, runStart: runStart, lastEntry: runStart, closedSeconds: 999}
+	poller := newTestPoller(jiraClient, issueSession, &fakeReminderEngineService{}, newFakeRegistrationRepositoryForPoller("dev@esb.co.id"))
+
+	if err := poller.pollOnce(context.Background()); err != nil {
+		t.Fatalf("pollOnce: %v", err)
+	}
+	if got := issueSession.sessions["CORE-2"].AccumulatedSeconds; got != 0 {
+		t.Errorf("new session accumulatedSeconds = %d, want 0", got)
 	}
 }
 

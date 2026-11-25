@@ -15,6 +15,12 @@ type JiraClientService interface {
 	// from an UNtracked status), lastEntry = the most recent transition into
 	// any tracked status. found=false when it never entered one.
 	GetTrackedRunTimes(ctx context.Context, issueKey string) (runStart, lastEntry time.Time, found bool, err error)
+	// GetClosedRunSeconds adds up every CLOSED run of tracked statuses in the
+	// issue's changelog, each measured by elapsed (business hours). The run
+	// the issue is in right now is left out: it belongs to the live session.
+	// Used to rebuild a reopened session's stored time without counting the
+	// current run twice.
+	GetClosedRunSeconds(ctx context.Context, issueKey string, elapsed func(start, end time.Time) int64) (int64, error)
 	// LookupUserByEmail reports whether a Jira account matches email and,
 	// if so, its accountId — the canonical identifier for matching
 	// registered users against issue assignees later (Jira hides

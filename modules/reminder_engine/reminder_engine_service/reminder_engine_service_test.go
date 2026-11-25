@@ -78,6 +78,10 @@ func (f *fakeIssueSessionService) OpenOrResumeSessionAt(ctx context.Context, iss
 func (f *fakeIssueSessionService) UpdateStoryPoints(ctx context.Context, issueKey string, storyPoints float64, assigneeEmail, issueSummary, sprintName string) error {
 	return nil
 }
+func (f *fakeIssueSessionService) SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
+	return nil
+}
+
 func (f *fakeIssueSessionService) CloseSession(ctx context.Context, issueKey string, additionalSeconds int64) error {
 	return nil
 }

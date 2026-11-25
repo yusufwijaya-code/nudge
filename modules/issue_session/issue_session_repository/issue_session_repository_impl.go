@@ -92,6 +92,18 @@ func (r *issueSessionRepositoryImpl) CloseSession(ctx context.Context, issueKey 
 	return err
 }
 
+func (r *issueSessionRepositoryImpl) SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error {
+	const query = `
+		UPDATE tr_issuesession
+		SET accumulatedSeconds = ?,
+		    editedBy = 'poller',
+		    editedDate = CURRENT_TIMESTAMP
+		WHERE issueKey = ?
+	`
+	_, err := r.db.ExecContext(ctx, query, seconds, issueKey)
+	return err
+}
+
 const sessionColumns = `issueSessionID, issueKey, projectKey, storyPoints,
 		       accumulatedSeconds, currentSessionStartedDate, flagActive,
 		       lastOverageReminderDate, assigneeEmail, issueSummary, sprintName, boardID, sprintID, createdBy, createdDate`

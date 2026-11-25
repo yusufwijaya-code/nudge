@@ -12,6 +12,10 @@ type IssueSessionRepository interface {
 	OpenOrResumeSessionAt(ctx context.Context, issueKey, projectKey string, storyPoints float64, startedAt time.Time, assigneeEmail, issueSummary, sprintName string) error
 	UpdateStoryPoints(ctx context.Context, issueKey string, storyPoints float64, assigneeEmail, issueSummary, sprintName string) error
 	CloseSession(ctx context.Context, issueKey string, additionalSeconds int64) error
+	// SetAccumulatedSeconds overwrites the stored time of the ticket's closed
+	// runs (not the run in progress). Reopening a session uses it to replace a
+	// value that may already contain part of the current run.
+	SetAccumulatedSeconds(ctx context.Context, issueKey string, seconds int64) error
 	GetActiveSessions(ctx context.Context) ([]issue_session_dto.IssueSession, error)
 	GetSessionByIssueKey(ctx context.Context, issueKey string) (*issue_session_dto.IssueSession, bool, error)
 	UpdateLastOverageReminder(ctx context.Context, issueKey string) error

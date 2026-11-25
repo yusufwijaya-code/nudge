@@ -376,3 +376,39 @@ func TestUpdateActiveSprint_SetsAndClearsBoardAndSprint(t *testing.T) {
 		t.Errorf("after clearing board/sprint = %v/%v, want nil", session.BoardID, session.SprintID)
 	}
 }
+
+// Reopening a session that was closed in the middle of a run rebuilds its
+// stored time; the upsert alone keeps the old value (PL-11738).
+func TestSetAccumulatedSeconds_OverwritesStoredTimeAndKeepsTheLiveClock(t *testing.T) {
+	db := testutil.OpenTestDB(t)
+	repo := NewIssueSessionRepository(db)
+	ctx := context.Background()
+	cleanupSession(t, repo, "TESTMYSQL-9")
+
+	start := time.Date(2026, 11, 18, 4, 22, 51, 0, time.UTC)
+	if err := repo.OpenOrResumeSessionAt(ctx, "TESTMYSQL-9", "TESTMYSQL", 4, start, "dev@esb.co.id", "Reopen", ""); err != nil {
+		t.Fatalf("OpenOrResumeSessionAt returned error: %v", err)
+	}
+	if err := repo.CloseSession(ctx, "TESTMYSQL-9", 1563); err != nil {
+		t.Fatalf("CloseSession returned error: %v", err)
+	}
+	if err := repo.OpenOrResumeSessionAt(ctx, "TESTMYSQL-9", "TESTMYSQL", 4, start, "dev@esb.co.id", "Reopen", ""); err != nil {
+		t.Fatalf("reopen returned error: %v", err)
+	}
+
+	session, _, _ := repo.GetSessionByIssueKey(ctx, "TESTMYSQL-9")
+	if session.AccumulatedSeconds != 1563 {
+		t.Fatalf("after the plain reopen AccumulatedSeconds = %d, want the stale 1563 (this is the bug SetAccumulatedSeconds repairs)", session.AccumulatedSeconds)
+	}
+
+	if err := repo.SetAccumulatedSeconds(ctx, "TESTMYSQL-9", 0); err != nil {
+		t.Fatalf("SetAccumulatedSeconds returned error: %v", err)
+	}
+	session, _, _ = repo.GetSessionByIssueKey(ctx, "TESTMYSQL-9")
+	if session.AccumulatedSeconds != 0 {
+		t.Errorf("AccumulatedSeconds = %d, want 0", session.AccumulatedSeconds)
+	}
+	if !session.FlagActive || session.CurrentSessionStartedDate == nil || !session.CurrentSessionStartedDate.Equal(start) {
+		t.Errorf("the live session must be untouched: active=%v start=%v", session.FlagActive, session.CurrentSessionStartedDate)
+	}
+}

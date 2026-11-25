@@ -226,12 +226,19 @@ func (p *pollerServiceImpl) pollOnce(ctx context.Context) error {
 		if _, alreadyActive := activeByKey[key]; alreadyActive {
 			continue
 		}
-		entryTime, err := p.sessionStartTime(ctx, key)
+		entryTime, closedSeconds, err := p.sessionStart(ctx, key, resolvedEmails[key])
 		if err != nil {
 			return err
 		}
 		if err := p.issueSession.OpenOrResumeSessionAt(ctx, key, projectKeyFromIssueKey(key), storyPointsOf(issue), entryTime, resolvedEmails[key], issue.Fields.Summary, sprintNameOf(issue)); err != nil {
 			return fmt.Errorf("poller: OpenOrResumeSessionAt(%s) failed: %w", key, err)
+		}
+		if closedSeconds != nil {
+			// A reopened session still holds what was stored when it closed,
+			// possibly part of THIS run (see sessionStart): rebuild it.
+			if err := p.issueSession.SetAccumulatedSeconds(ctx, key, *closedSeconds); err != nil {
+				return fmt.Errorf("poller: SetAccumulatedSeconds(%s) failed: %w", key, err)
+			}
 		}
 	}
 
@@ -294,7 +301,7 @@ func (p *pollerServiceImpl) backfillActiveSessions(ctx context.Context) error {
 			continue
 		}
 
-		entryTime, err := p.sessionStartTime(ctx, issue.Key)
+		entryTime, _, err := p.sessionStart(ctx, issue.Key, resolvedEmails[issue.Key])
 		if err != nil {
 			return fmt.Errorf("poller: backfill %w", err)
 		}
@@ -341,33 +348,43 @@ func sameID(a, b *int64) bool {
 	return *a == *b
 }
 
-// sessionStartTime picks when a (re)opened session's clock starts (Tech Spec
-// "CORE: Waktu Code Review Ikut Dihitung", AC1.5):
-//   - a ticket never tracked before starts at the beginning of its current
-//     run of tracked statuses — for CORE that includes Code Process time
-//     before it moved to CODE REVIEW;
-//   - a ticket whose (closed) session is being reopened starts at its latest
-//     entry into a tracked status, so time already accumulated is never
-//     counted twice (e.g. a CORE ticket closed when it entered review under
-//     the old rules, reopened by this version).
+// sessionStart picks when a (re)opened session's clock starts and, for a
+// session that already exists, what its stored time must be reset to:
+//   - the clock always starts at the beginning of the ticket's CURRENT run of
+//     tracked statuses (for CORE that includes Code Process time before it
+//     moved to CODE REVIEW);
+//   - a ticket never tracked before has nothing stored (closedSeconds == nil);
+//   - a ticket whose (closed) session is being reopened gets closedSeconds =
+//     the changelog's earlier, CLOSED runs. The stored value cannot be trusted
+//     as is: a session closed in the middle of the current run (the assignee's
+//     account was deleted and registered again, so the ticket briefly left the
+//     tracked set) already holds that run's time up to the close, and starting
+//     the clock at the run start again would count it twice (PL-11738).
 //
-// No changelog entry → now.
-func (p *pollerServiceImpl) sessionStartTime(ctx context.Context, issueKey string) (time.Time, error) {
-	runStart, lastEntry, found, err := p.jiraClient.GetTrackedRunTimes(ctx, issueKey)
+// No changelog entry → now, stored time untouched.
+func (p *pollerServiceImpl) sessionStart(ctx context.Context, issueKey, assigneeEmail string) (start time.Time, closedSeconds *int64, err error) {
+	runStart, _, found, err := p.jiraClient.GetTrackedRunTimes(ctx, issueKey)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("poller: GetTrackedRunTimes(%s) failed: %w", issueKey, err)
+		return time.Time{}, nil, fmt.Errorf("poller: GetTrackedRunTimes(%s) failed: %w", issueKey, err)
 	}
 	if !found {
-		return time.Now(), nil
+		return time.Now(), nil, nil
 	}
 	_, existed, err := p.issueSession.GetSessionByIssueKey(ctx, issueKey)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("poller: GetSessionByIssueKey(%s) failed: %w", issueKey, err)
+		return time.Time{}, nil, fmt.Errorf("poller: GetSessionByIssueKey(%s) failed: %w", issueKey, err)
 	}
-	if existed {
-		return lastEntry, nil
+	if !existed {
+		return runStart, nil, nil
 	}
-	return runStart, nil
+	cal := p.holidayCalendar.ForEmail(ctx, assigneeEmail)
+	seconds, err := p.jiraClient.GetClosedRunSeconds(ctx, issueKey, func(from, to time.Time) int64 {
+		return p.businessHours.ElapsedBusinessSeconds(from, to, cal)
+	})
+	if err != nil {
+		return time.Time{}, nil, fmt.Errorf("poller: GetClosedRunSeconds(%s) failed: %w", issueKey, err)
+	}
+	return runStart, &seconds, nil
 }
 
 func storyPointsOf(issue jira_client_dto.Issue) float64 {
