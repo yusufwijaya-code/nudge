@@ -22,6 +22,10 @@ var ErrEncryptionKeyNotConfigured = errors.New("jira_account: CREDENTIAL_ENCRYPT
 // ErrInvalidInput is returned for an empty or malformed email / token.
 var ErrInvalidInput = errors.New("jira_account: email and API token are required")
 
+// ErrNotConfigured is returned when something needs the account in force and
+// no account has been set up.
+var ErrNotConfigured = errors.New("jira_account: no Jira account is set up")
+
 // tokenHintLen is how many trailing characters of the token the admin sees,
 // enough to tell which token is in force, not enough to reconstruct it.
 const tokenHintLen = 4
@@ -44,10 +48,14 @@ type ExpiringUser struct {
 
 // Status is what the admin page shows. The token itself never leaves here.
 type Status struct {
-	// Source is "database" (saved by an admin) or "env" (JIRA_EMAIL / JIRA_API_TOKEN).
-	Source          string     `json:"source"`
-	Email           string     `json:"email"`
-	TokenHint       string     `json:"tokenHint"`
+	// Source is "database" (an account is set up) or "none" (nothing is set up:
+	// the bot cannot read Jira until an admin fills it in).
+	Source    string `json:"source"`
+	Email     string `json:"email"`
+	TokenHint string `json:"tokenHint"`
+	// Unreadable: an account is stored but cannot be decrypted (the encryption
+	// key changed), so it is not in force. Saving a new one replaces it.
+	Unreadable      bool       `json:"unreadable"`
 	UpdatedBy       string     `json:"updatedBy,omitempty"`
 	UpdatedDate     *time.Time `json:"updatedDate,omitempty"`
 	EncryptionReady bool       `json:"encryptionReady"`
@@ -62,10 +70,11 @@ type API interface {
 	Test(ctx context.Context) (Identity, error)
 	// Save verifies and stores a new account; expiresAt is "YYYY-MM-DD" or "".
 	Save(ctx context.Context, email, apiToken, expiresAt, editor string) (Identity, error)
-	// SetExpiry records only the expiry day of the token in force ("" clears it).
+	// SetExpiry records only the expiry day of the account in force ("" clears it).
 	SetExpiry(ctx context.Context, expiresAt, editor string) error
 	// ExpiringUsers lists the users whose personal token expires within ExpiryWarnDays.
 	ExpiringUsers(ctx context.Context) ([]ExpiringUser, error)
+	// Reset removes the account: the bot stops reading Jira until a new one is saved.
 	Reset(ctx context.Context) error
 }
 
@@ -74,14 +83,18 @@ type Service struct {
 	checker  Checker
 	key      [32]byte
 	keyReady bool
-	envEmail string
-	envToken string
-	expiring ExpiringSource
+	// legacyEmail / legacyToken are the JIRA_EMAIL / JIRA_API_TOKEN a server
+	// used before the account moved to the admin panel. They are read once, to
+	// carry that account over (see Load); nothing else uses them.
+	legacyEmail string
+	legacyToken string
+	expiring    ExpiringSource
+	unreadable  bool
 }
 
 func NewService(cfg *config.AppConfig, repo Repository, checker Checker) *Service {
 	key, ok := parseKey(cfg.CredentialEncryptionKey)
-	return &Service{repo: repo, checker: checker, key: key, keyReady: ok, envEmail: cfg.JiraEmail, envToken: cfg.JiraAPIToken}
+	return &Service{repo: repo, checker: checker, key: key, keyReady: ok, legacyEmail: cfg.LegacyJiraEmail, legacyToken: cfg.LegacyJiraAPIToken}
 }
 
 // WithExpiringUsers adds the personal-token source behind the admin banner.
@@ -100,26 +113,32 @@ func parseKey(encoded string) ([32]byte, bool) {
 	return key, true
 }
 
-// Load installs the saved account at start. A stored token that cannot be
-// decrypted (key changed) is logged and ignored: the service keeps running on
-// the environment pair rather than failing to boot.
+// Load puts the saved account in force at start.
+//
+// A server that still has JIRA_EMAIL / JIRA_API_TOKEN in its environment and no
+// saved account has that pair carried over once, encrypted into the database,
+// so the bot keeps working through the move to the admin panel; the two
+// variables can then be deleted. A stored token that cannot be decrypted (the
+// key changed) is logged and left out of force rather than failing to boot.
 func (s *Service) Load(ctx context.Context) error {
+	s.unreadable = false
 	rec, err := s.repo.Find(ctx)
 	if err != nil {
 		return err
 	}
 	if rec == nil {
-		jira_account_holder.SetOverride(nil)
-		return nil
+		return s.carryOverLegacy(ctx)
 	}
 	if !s.keyReady {
-		log.Printf("jira_account: a saved account exists but CREDENTIAL_ENCRYPTION_KEY is not usable; using the environment credential")
+		log.Printf("jira_account: a saved account exists but CREDENTIAL_ENCRYPTION_KEY is not usable; no Jira account is in force")
+		s.unreadable = true
 		jira_account_holder.SetOverride(nil)
 		return nil
 	}
 	plain, err := jira_credential_crypto.Decrypt(rec.TokenEncrypted, s.key)
 	if err != nil {
-		log.Printf("jira_account: the saved account could not be decrypted (%v); using the environment credential", err)
+		log.Printf("jira_account: the saved account could not be decrypted (%v); no Jira account is in force", err)
+		s.unreadable = true
 		jira_account_holder.SetOverride(nil)
 		return nil
 	}
@@ -127,15 +146,43 @@ func (s *Service) Load(ctx context.Context) error {
 	return nil
 }
 
+// carryOverLegacy moves the old environment account into the database, once.
+func (s *Service) carryOverLegacy(ctx context.Context) error {
+	email, token := strings.TrimSpace(s.legacyEmail), strings.TrimSpace(s.legacyToken)
+	if email == "" || token == "" {
+		jira_account_holder.SetOverride(nil)
+		return nil
+	}
+	cred := &jira_account_holder.Credential{Email: email, APIToken: token}
+	if !s.keyReady {
+		log.Printf("jira_account: using JIRA_EMAIL / JIRA_API_TOKEN from the environment for now; CREDENTIAL_ENCRYPTION_KEY is not usable, so it cannot be moved into the admin panel")
+		jira_account_holder.SetOverride(cred)
+		return nil
+	}
+	sealed, err := jira_credential_crypto.Encrypt([]byte(token), s.key)
+	if err != nil {
+		return fmt.Errorf("jira_account: encrypt the carried-over token: %w", err)
+	}
+	if err := s.repo.Save(ctx, Record{Email: email, TokenEncrypted: sealed, UpdatedBy: "env-import"}); err != nil {
+		return err
+	}
+	jira_account_holder.SetOverride(cred)
+	log.Printf("jira_account: carried the Jira account %s over from the environment into the admin panel; JIRA_EMAIL and JIRA_API_TOKEN can be deleted from .env", email)
+	return nil
+}
+
 func (s *Service) Status(ctx context.Context) (Status, error) {
+	st := Status{Source: "none", EncryptionReady: s.keyReady, Unreadable: s.unreadable}
+	email, token, ok := jira_account_holder.Current()
+	if !ok {
+		return st, nil
+	}
+	st.Source, st.Email, st.TokenHint = "database", email, hint(token)
 	rec, err := s.repo.Find(ctx)
 	if err != nil {
 		return Status{}, err
 	}
-	email, token := jira_account_holder.Current(s.envEmail, s.envToken)
-	st := Status{Source: "env", Email: email, TokenHint: hint(token), EncryptionReady: s.keyReady}
-	if rec != nil && jira_account_holder.Override() != nil {
-		st.Source = "database"
+	if rec != nil {
 		st.UpdatedBy = rec.UpdatedBy
 		updated := rec.UpdatedDate
 		st.UpdatedDate = &updated
@@ -155,9 +202,12 @@ func hint(token string) string {
 	return "••••••••" + token[len(token)-tokenHintLen:]
 }
 
-// Test asks Jira who the credential in force is.
+// Test asks Jira who the account in force is.
 func (s *Service) Test(ctx context.Context) (Identity, error) {
-	email, token := jira_account_holder.Current(s.envEmail, s.envToken)
+	email, token, ok := jira_account_holder.Current()
+	if !ok {
+		return Identity{}, ErrNotConfigured
+	}
 	return s.checker.WhoAmI(ctx, email, token)
 }
 
@@ -192,11 +242,16 @@ func (s *Service) Save(ctx context.Context, email, apiToken, expiresAt, editor s
 	if err := s.repo.SaveExpiry(ctx, day, editor); err != nil {
 		log.Printf("jira_account: saving the expiry failed: %v", err)
 	}
+	s.unreadable = false
 	jira_account_holder.SetOverride(&jira_account_holder.Credential{Email: email, APIToken: apiToken})
 	return who, nil
 }
 
+// SetExpiry changes only the date of the account in force.
 func (s *Service) SetExpiry(ctx context.Context, expiresAt, editor string) error {
+	if !jira_account_holder.Configured() {
+		return ErrNotConfigured
+	}
 	day, err := jira_credential_dto.ParseExpiryDate(expiresAt, time.Now())
 	if err != nil {
 		return err
@@ -220,7 +275,7 @@ func (s *Service) ExpiringUsers(ctx context.Context) ([]ExpiringUser, error) {
 	return out, nil
 }
 
-// Reset removes the saved account: the environment pair is used again.
+// Reset removes the account: no Jira account is in force until a new one is saved.
 func (s *Service) Reset(ctx context.Context) error {
 	if err := s.repo.Delete(ctx); err != nil {
 		return err
@@ -229,6 +284,7 @@ func (s *Service) Reset(ctx context.Context) error {
 	if err := s.repo.SaveExpiry(ctx, nil, ""); err != nil {
 		return err
 	}
+	s.unreadable = false
 	jira_account_holder.SetOverride(nil)
 	return nil
 }

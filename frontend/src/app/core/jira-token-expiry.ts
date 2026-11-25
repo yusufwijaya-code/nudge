@@ -41,6 +41,12 @@ export function tokenExpiry(expiresAt: string | null | undefined, now: Date = ne
   return { level: daysLeft <= JIRA_TOKEN_WARN_DAYS ? 'soon' : 'ok', daysLeft };
 }
 
+/** The latest expiry day the server accepts: ten years ahead, as "YYYY-MM-DD" on the WIB calendar. */
+export function expiryMaxDay(now: Date = new Date()): string {
+  const today = now.toLocaleDateString('en-CA', { timeZone: WIB });
+  return `${Number(today.slice(0, 4)) + 10}${today.slice(4)}`;
+}
+
 /** "2026-11-30" → "30 Nov 2026" (fixed Indonesian month names, no locale dependency). */
 export function expiryDateLabel(isoDay: string): string {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];

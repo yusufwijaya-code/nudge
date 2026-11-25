@@ -35,7 +35,7 @@ export type BudgetLevel = 'ok' | 'warn' | 'over';
 export interface ActiveTicket extends TicketCard {
   percent: number;
   level: BudgetLevel;
-  /** Short "2:35:12" texts for the meta line (like the DM reminder). */
+  /** Short "2 jam 35 menit" texts for the meta line (like the DM reminder). */
   elapsedText: string;
   budgetText: string;
   remainingText: string;
@@ -44,12 +44,12 @@ export interface ActiveTicket extends TicketCard {
   deadlineText: string;
 }
 
-/** H:MM:SS, M:SS or "S detik" (see core/duration-format.ts); the sign is ignored. */
+/** Words without zero units, e.g. "1 jam 34 menit 20 detik" (see core/duration-format.ts); the sign is ignored. */
 export function shortDuration(seconds: number): string {
   return formatDuration(seconds);
 }
 
-/** Decimal hours (sprint report) → the same reading: 2.5 → "2:30:00". */
+/** Decimal hours (sprint report) → the same words: 2.5 → "2 jam 30 menit". */
 export function hoursDuration(hours: number): string {
   return formatHours(hours);
 }

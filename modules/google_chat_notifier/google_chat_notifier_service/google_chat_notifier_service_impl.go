@@ -114,12 +114,12 @@ func BuildMessageText(msg google_chat_notifier_dto.ReminderMessage) string {
 	return strings.Join(lines, "\n")
 }
 
-// FormatDuration renders a second count as H:MM:SS (M:SS under an hour, "S
-// detik" under a minute): used for the pre-deadline countdown, the overage
-// amount, the elapsed time and the budget, so all read the same way instead of
-// a vague decimal-hours figure. See duration_helper.Clock.
+// FormatDuration renders a second count in words without its zero units ("1
+// jam 34 menit 20 detik", "30 menit"): used for the pre-deadline countdown, the
+// overage amount, the elapsed time and the budget, so all read the same way
+// instead of a vague decimal-hours figure. See duration_helper.Format.
 func FormatDuration(totalSeconds int64) string {
-	return duration_helper.Clock(totalSeconds)
+	return duration_helper.Format(totalSeconds)
 }
 
 var indonesianWeekdays = map[time.Weekday]string{

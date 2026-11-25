@@ -15,14 +15,12 @@ import (
 )
 
 type fakeRepo struct {
-	expiry     *time.Time
-	expiryBy   string
-	rec        *Record
-	saveCalls  int
-	deleteErr  error
-	saveErr    error
-	findErr    error
-	deleteCall int
+	expiry    *time.Time
+	expiryBy  string
+	rec       *Record
+	saveCalls int
+	saveErr   error
+	findErr   error
 }
 
 func (f *fakeRepo) Find(context.Context) (*Record, error) { return f.rec, f.findErr }
@@ -41,10 +39,6 @@ func (f *fakeRepo) SaveExpiry(_ context.Context, day *time.Time, editor string) 
 	return nil
 }
 func (f *fakeRepo) Delete(context.Context) error {
-	f.deleteCall++
-	if f.deleteErr != nil {
-		return f.deleteErr
-	}
 	f.rec = nil
 	return nil
 }
@@ -61,15 +55,33 @@ func (f *fakeChecker) WhoAmI(_ context.Context, email, token string) (Identity, 
 	return f.who, f.err
 }
 
-// 32 bytes, base64 — the shape CREDENTIAL_ENCRYPTION_KEY has.
+// 32 bytes, base64: the shape CREDENTIAL_ENCRYPTION_KEY has.
 var testKey = base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+
+func sealed(t *testing.T, token string) []byte {
+	t.Helper()
+	var key [32]byte
+	copy(key[:], "0123456789abcdef0123456789abcdef")
+	out, err := jira_credential_crypto.Encrypt([]byte(token), key)
+	if err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	return out
+}
 
 func newService(t *testing.T, key string, repo *fakeRepo, checker *fakeChecker) *Service {
 	t.Helper()
 	jira_account_holder.SetOverride(nil)
 	t.Cleanup(func() { jira_account_holder.SetOverride(nil) })
-	cfg := &config.AppConfig{CredentialEncryptionKey: key, JiraEmail: "env@esb.co.id", JiraAPIToken: "env-token-1234"}
-	return NewService(cfg, repo, checker)
+	return NewService(&config.AppConfig{CredentialEncryptionKey: key}, repo, checker)
+}
+
+// newLegacyService is a server that still has JIRA_EMAIL / JIRA_API_TOKEN.
+func newLegacyService(t *testing.T, key string, repo *fakeRepo) *Service {
+	t.Helper()
+	jira_account_holder.SetOverride(nil)
+	t.Cleanup(func() { jira_account_holder.SetOverride(nil) })
+	return NewService(&config.AppConfig{CredentialEncryptionKey: key, LegacyJiraEmail: "legacy@esb.co.id", LegacyJiraAPIToken: "legacy-token-1234"}, repo, &fakeChecker{})
 }
 
 func TestSave_StoresTheTokenEncryptedAndSwitchesEveryClientAtOnce(t *testing.T) {
@@ -92,9 +104,8 @@ func TestSave_StoresTheTokenEncryptedAndSwitchesEveryClientAtOnce(t *testing.T) 
 	if repo.rec.UpdatedBy != "admin@esb.co.id" {
 		t.Errorf("updatedBy = %q", repo.rec.UpdatedBy)
 	}
-	email, token := jira_account_holder.Current("env@esb.co.id", "env-token-1234")
-	if email != "bot@esb.co.id" || token != "new-secret-token" {
-		t.Errorf("credential in force = %q / %q, want the saved one at once", email, token)
+	if email, token, ok := jira_account_holder.Current(); !ok || email != "bot@esb.co.id" || token != "new-secret-token" {
+		t.Errorf("credential in force = %q / %q / %v, want the saved one at once", email, token, ok)
 	}
 }
 
@@ -103,6 +114,7 @@ func TestSave_StoresTheTokenEncryptedAndSwitchesEveryClientAtOnce(t *testing.T) 
 func TestSave_NeverStoresOrSwitchesToACredentialJiraRejects(t *testing.T) {
 	repo, checker := &fakeRepo{}, &fakeChecker{err: ErrRejected}
 	svc := newService(t, testKey, repo, checker)
+	jira_account_holder.SetOverride(&jira_account_holder.Credential{Email: "good@esb.co.id", APIToken: "good-token"})
 
 	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "wrong", "", "admin@esb.co.id"); !errors.Is(err, ErrRejected) {
 		t.Fatalf("err = %v, want ErrRejected", err)
@@ -110,8 +122,8 @@ func TestSave_NeverStoresOrSwitchesToACredentialJiraRejects(t *testing.T) {
 	if repo.saveCalls != 0 {
 		t.Error("a rejected credential must not be saved")
 	}
-	if email, token := jira_account_holder.Current("env@esb.co.id", "env-token-1234"); email != "env@esb.co.id" || token != "env-token-1234" {
-		t.Errorf("credential in force changed to %q / %q after a rejected save", email, token)
+	if email, _, _ := jira_account_holder.Current(); email != "good@esb.co.id" {
+		t.Errorf("credential in force changed to %q after a rejected save", email)
 	}
 }
 
@@ -128,96 +140,160 @@ func TestSave_RejectsEmptyOrMalformedInputAndAMissingKey(t *testing.T) {
 	}
 }
 
-func TestLoad_InstallsTheSavedAccountAtStart(t *testing.T) {
-	var key [32]byte
-	copy(key[:], "0123456789abcdef0123456789abcdef")
-	sealed, _ := jira_credential_crypto.Encrypt([]byte("stored-token"), key)
-	repo := &fakeRepo{rec: &Record{Email: "bot@esb.co.id", TokenEncrypted: sealed, UpdatedBy: "admin@esb.co.id"}}
+func TestLoad_PutsTheSavedAccountInForceAtStart(t *testing.T) {
+	repo := &fakeRepo{rec: &Record{Email: "bot@esb.co.id", TokenEncrypted: sealed(t, "stored-token"), UpdatedBy: "admin@esb.co.id"}}
 	svc := newService(t, testKey, repo, &fakeChecker{})
 
 	if err := svc.Load(context.Background()); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if email, token := jira_account_holder.Current("env@esb.co.id", "env-token-1234"); email != "bot@esb.co.id" || token != "stored-token" {
-		t.Errorf("credential in force = %q / %q", email, token)
+	if email, token, ok := jira_account_holder.Current(); !ok || email != "bot@esb.co.id" || token != "stored-token" {
+		t.Errorf("credential in force = %q / %q / %v", email, token, ok)
 	}
 }
 
-// A changed CREDENTIAL_ENCRYPTION_KEY must not stop the service from booting
-// or leave it without a Jira credential.
-func TestLoad_FallsBackToEnvWhenTheSavedTokenCannotBeDecrypted(t *testing.T) {
+// There is no environment fallback: without an account nothing can act as the bot.
+func TestLoad_WithNothingSavedAndNoLegacyPairLeavesNoAccountInForce(t *testing.T) {
+	svc := newService(t, testKey, &fakeRepo{}, &fakeChecker{})
+	if err := svc.Load(context.Background()); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if jira_account_holder.Configured() {
+		t.Error("no account must be in force")
+	}
+	st, _ := svc.Status(context.Background())
+	if st.Source != "none" || st.Email != "" || st.TokenHint != "" || st.Unreadable {
+		t.Errorf("status = %+v, want none", st)
+	}
+}
+
+// A server that still has JIRA_EMAIL / JIRA_API_TOKEN keeps working through the
+// move: the pair is carried into the database once.
+func TestLoad_CarriesTheLegacyEnvPairIntoTheDatabaseOnce(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := newLegacyService(t, testKey, repo)
+
+	if err := svc.Load(context.Background()); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if email, token, ok := jira_account_holder.Current(); !ok || email != "legacy@esb.co.id" || token != "legacy-token-1234" {
+		t.Errorf("credential in force = %q / %q / %v", email, token, ok)
+	}
+	if repo.rec == nil || repo.rec.Email != "legacy@esb.co.id" || repo.rec.UpdatedBy != "env-import" {
+		t.Fatalf("stored = %+v, want the carried-over account", repo.rec)
+	}
+	if strings.Contains(string(repo.rec.TokenEncrypted), "legacy-token-1234") {
+		t.Error("the carried-over token must be stored encrypted")
+	}
+
+	// From now on the database is the source: a changed env pair is ignored.
+	svc2 := NewService(&config.AppConfig{CredentialEncryptionKey: testKey, LegacyJiraEmail: "other@esb.co.id", LegacyJiraAPIToken: "other-token"}, repo, &fakeChecker{})
+	jira_account_holder.SetOverride(nil)
+	if err := svc2.Load(context.Background()); err != nil {
+		t.Fatalf("second Load: %v", err)
+	}
+	if email, _, _ := jira_account_holder.Current(); email != "legacy@esb.co.id" {
+		t.Errorf("credential in force = %q, want the stored account, not the env pair", email)
+	}
+	if repo.saveCalls != 1 {
+		t.Errorf("saves = %d, want the carry-over to happen once", repo.saveCalls)
+	}
+}
+
+func TestLoad_KeepsTheLegacyPairInMemoryWhenItCannotBeEncrypted(t *testing.T) {
+	repo := &fakeRepo{}
+	svc := newLegacyService(t, "", repo)
+	if err := svc.Load(context.Background()); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if email, _, ok := jira_account_holder.Current(); !ok || email != "legacy@esb.co.id" {
+		t.Errorf("the bot must keep working: %q / %v", email, ok)
+	}
+	if repo.saveCalls != 0 {
+		t.Error("nothing can be stored without an encryption key")
+	}
+}
+
+// A changed CREDENTIAL_ENCRYPTION_KEY must not stop the service from booting;
+// the admin is told and saves the account again.
+func TestLoad_ReportsAStoredAccountThatCannotBeDecrypted(t *testing.T) {
 	repo := &fakeRepo{rec: &Record{Email: "bot@esb.co.id", TokenEncrypted: []byte("garbage-not-a-sealed-token-at-all"), UpdatedBy: "x"}}
 	svc := newService(t, testKey, repo, &fakeChecker{})
 
 	if err := svc.Load(context.Background()); err != nil {
 		t.Fatalf("Load must not fail: %v", err)
 	}
-	if email, _ := jira_account_holder.Current("env@esb.co.id", "env-token-1234"); email != "env@esb.co.id" {
-		t.Errorf("credential in force = %q, want the env fallback", email)
+	if jira_account_holder.Configured() {
+		t.Error("an unreadable account must not be in force")
+	}
+	st, _ := svc.Status(context.Background())
+	if st.Source != "none" || !st.Unreadable {
+		t.Errorf("status = %+v, want none + unreadable", st)
+	}
+
+	// Saving a new one replaces it and clears the warning.
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "new-token", "", "admin@esb.co.id"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if st, _ := svc.Status(context.Background()); st.Unreadable || st.Source != "database" {
+		t.Errorf("status after saving = %+v", st)
 	}
 }
 
-func TestLoad_WithNothingSavedKeepsTheEnvCredential(t *testing.T) {
-	svc := newService(t, testKey, &fakeRepo{}, &fakeChecker{})
-	if err := svc.Load(context.Background()); err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if email, _ := jira_account_holder.Current("env@esb.co.id", "env-token-1234"); email != "env@esb.co.id" {
-		t.Errorf("credential in force = %q", email)
-	}
-}
-
-func TestReset_GoesBackToTheEnvPair(t *testing.T) {
+func TestReset_RemovesTheAccountAndItsDate(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := newService(t, testKey, repo, &fakeChecker{who: Identity{}})
-	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok", "", "a"); err != nil {
+	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok", "2027-10-26", "a"); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if err := svc.Reset(context.Background()); err != nil {
 		t.Fatalf("Reset: %v", err)
 	}
-	if repo.rec != nil {
-		t.Error("the saved row must be deleted")
+	if repo.rec != nil || repo.expiry != nil {
+		t.Errorf("stored account %+v / date %v must be gone", repo.rec, repo.expiry)
 	}
-	if email, token := jira_account_holder.Current("env@esb.co.id", "env-token-1234"); email != "env@esb.co.id" || token != "env-token-1234" {
-		t.Errorf("credential in force = %q / %q, want env", email, token)
+	if jira_account_holder.Configured() {
+		t.Error("no account may stay in force after Reset")
 	}
 }
 
-func TestStatus_ShowsTheSourceAndOnlyTheLastFourOfTheToken(t *testing.T) {
+func TestStatus_ShowsTheAccountAndOnlyTheLastFourOfTheToken(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := newService(t, testKey, repo, &fakeChecker{})
-
-	st, err := svc.Status(context.Background())
-	if err != nil {
-		t.Fatalf("Status: %v", err)
-	}
-	if st.Source != "env" || st.Email != "env@esb.co.id" || st.TokenHint != "••••••••1234" || !st.EncryptionReady || st.UpdatedBy != "" {
-		t.Errorf("env status = %+v", st)
-	}
 
 	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "abcdefgh-WXYZ", "", "admin@esb.co.id"); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	st, _ = svc.Status(context.Background())
-	if st.Source != "database" || st.Email != "bot@esb.co.id" || st.TokenHint != "••••••••WXYZ" || st.UpdatedBy != "admin@esb.co.id" || st.UpdatedDate == nil {
-		t.Errorf("database status = %+v", st)
+	st, err := svc.Status(context.Background())
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	if st.Source != "database" || st.Email != "bot@esb.co.id" || st.TokenHint != "••••••••WXYZ" || st.UpdatedBy != "admin@esb.co.id" || st.UpdatedDate == nil || !st.EncryptionReady {
+		t.Errorf("status = %+v", st)
 	}
 	if strings.Contains(st.TokenHint, "abcdefgh") {
 		t.Error("the hint must not reveal more than the last characters")
 	}
 }
 
-func TestTest_ChecksTheCredentialInForce(t *testing.T) {
+func TestTest_AsksJiraAboutTheAccountInForceAndRefusesWithoutOne(t *testing.T) {
 	checker := &fakeChecker{who: Identity{DisplayName: "Yusuf Wijaya"}}
 	svc := newService(t, testKey, &fakeRepo{}, checker)
 
+	if _, err := svc.Test(context.Background()); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("without an account: err = %v, want ErrNotConfigured", err)
+	}
+	if checker.gotMail != "" {
+		t.Error("Jira must not be asked when there is no account")
+	}
+
+	jira_account_holder.SetOverride(&jira_account_holder.Credential{Email: "yusuf.wijaya@esb.co.id", APIToken: "tok"})
 	who, err := svc.Test(context.Background())
 	if err != nil || who.DisplayName != "Yusuf Wijaya" {
 		t.Fatalf("Test = %+v, %v", who, err)
 	}
-	if checker.gotMail != "env@esb.co.id" || checker.gotTok != "env-token-1234" {
-		t.Errorf("checked %q / %q, want the env pair", checker.gotMail, checker.gotTok)
+	if checker.gotMail != "yusuf.wijaya@esb.co.id" || checker.gotTok != "tok" {
+		t.Errorf("checked %q / %q", checker.gotMail, checker.gotTok)
 	}
 }
 
@@ -259,12 +335,20 @@ func TestSave_RejectsABadExpiryBeforeStoringAnything(t *testing.T) {
 	}
 }
 
-func TestSetExpiry_ChangesOnlyTheDateAndAcceptsAnAlreadyPastOne(t *testing.T) {
+func TestSetExpiry_ChangesOnlyTheDateOfTheAccountInForce(t *testing.T) {
 	repo := &fakeRepo{}
 	svc := newService(t, testKey, repo, &fakeChecker{})
 
+	if err := svc.SetExpiry(context.Background(), "2026-11-23", "admin@esb.co.id"); !errors.Is(err, ErrNotConfigured) {
+		t.Fatalf("without an account: err = %v, want ErrNotConfigured", err)
+	}
+	if repo.expiry != nil {
+		t.Error("a date must not be stored for an account that does not exist")
+	}
+
+	jira_account_holder.SetOverride(&jira_account_holder.Credential{Email: "bot@esb.co.id", APIToken: "tok"})
 	if err := svc.SetExpiry(context.Background(), "2026-11-23", "admin@esb.co.id"); err != nil {
-		t.Fatalf("SetExpiry: %v", err)
+		t.Fatalf("SetExpiry (a past date is fine): %v", err)
 	}
 	if repo.expiry == nil || repo.saveCalls != 0 {
 		t.Errorf("expiry = %v, token saves = %d; want the date alone", repo.expiry, repo.saveCalls)
@@ -274,20 +358,6 @@ func TestSetExpiry_ChangesOnlyTheDateAndAcceptsAnAlreadyPastOne(t *testing.T) {
 	}
 	if err := svc.SetExpiry(context.Background(), "nope", "a"); !errors.Is(err, jira_credential_dto.ErrInvalidExpiry) {
 		t.Errorf("err = %v", err)
-	}
-}
-
-func TestReset_ForgetsTheExpiryOfTheRemovedToken(t *testing.T) {
-	repo := &fakeRepo{}
-	svc := newService(t, testKey, repo, &fakeChecker{})
-	if _, err := svc.Save(context.Background(), "bot@esb.co.id", "tok", "2027-10-26", "a"); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	if err := svc.Reset(context.Background()); err != nil {
-		t.Fatalf("Reset: %v", err)
-	}
-	if repo.expiry != nil {
-		t.Errorf("expiry = %v after Reset, want none", repo.expiry)
 	}
 }
 

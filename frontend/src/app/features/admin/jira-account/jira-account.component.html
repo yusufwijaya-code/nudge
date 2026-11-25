@@ -7,7 +7,7 @@
         <p>Akun Jira tempat bot membaca tiket dan bertindak (geser status, dsb).</p>
       </div>
       @if (status) {
-        <span class="source-pill" [class.db]="status.source === 'database'" data-source>{{ sourceLabel }}</span>
+        <span class="source-pill" [class.db]="status.source === 'database'" [class.none]="status.source === 'none'" data-source>{{ sourceLabel }}</span>
       }
     </header>
 
@@ -15,6 +15,17 @@
       <p class="msg error" data-load-error><app-icon name="alert-circle" [size]="16" /> Gagal memuat akun Jira.</p>
     } @else if (!status) {
       <div class="ja-skeleton skeleton" aria-busy="true"></div>
+    } @else if (status.source === 'none') {
+      <p class="ja-none" data-none>
+        <app-icon name="alert-circle" [size]="18" />
+        <span>
+          <strong>Belum ada akun Jira.</strong>
+          Bot tidak bisa membaca tiket, mengirim reminder, atau menggeser status sampai akun diisi di bawah.
+          @if (status.unreadable) {
+            <small data-unreadable>Akun yang tersimpan tidak bisa dibaca (kunci enkripsi server berubah). Isi ulang di bawah.</small>
+          }
+        </span>
+      </p>
     } @else {
       <dl class="ja-facts">
         <div><dt>Email</dt><dd data-email>{{ status.email }}</dd></div>
@@ -58,8 +69,8 @@
 
       <div class="expiry-edit ja-expiry">
         <div class="field">
-          <label for="ja-expiry-edit">Tanggal kedaluwarsa token</label>
-          <input id="ja-expiry-edit" type="date" [value]="expiryValue" (input)="onExpiryInput($event)" />
+          <label>Tanggal kedaluwarsa token</label>
+          <app-date-range-picker id="ja-expiry-edit" [single]="true" [yearNav]="true" [from]="expiryValue" [max]="maxDay" placeholder="Pilih tanggal" ariaLabel="Tanggal kedaluwarsa token" (rangeChange)="onExpiryPicked($event)" />
         </div>
         <button type="button" class="btn btn-ghost" [class.loading]="savingExpiry" [disabled]="savingExpiry" (click)="onSaveExpiry()" data-save-expiry>
           <span class="spinner" aria-hidden="true"></span>
@@ -75,7 +86,7 @@
           <span class="spacer"></span>
           <button type="button" class="btn btn-danger-ghost" [class.loading]="resetting" [disabled]="resetting" (click)="onReset()" data-reset>
             <span class="spinner" aria-hidden="true"></span>
-            <span class="btn-label"><app-icon name="trash" [size]="16" /> Kembali ke akun env</span>
+            <span class="btn-label"><app-icon name="trash" [size]="16" /> Hapus akun</span>
           </button>
         </div>
       }
@@ -86,7 +97,7 @@
     <header class="card-header">
       <span class="card-icon"><app-icon name="lock" [size]="20" /></span>
       <div>
-        <h2>Ganti akun Jira</h2>
+        <h2 data-replace-title>{{ status?.source === 'database' ? 'Ganti akun Jira' : 'Pasang akun Jira' }}</h2>
         <p>Email dan API token diverifikasi ke Jira dulu, lalu disimpan terenkripsi dan langsung berlaku.</p>
       </div>
     </header>
@@ -94,7 +105,7 @@
     @if (status && !status.encryptionReady) {
       <p class="msg error" data-no-key>
         <app-icon name="alert-circle" [size]="16" />
-        CREDENTIAL_ENCRYPTION_KEY belum diatur di server, jadi token belum bisa disimpan. Akun env tetap dipakai.
+        CREDENTIAL_ENCRYPTION_KEY belum diatur di server, jadi token belum bisa disimpan. Akun belum bisa dipasang.
       </p>
     }
 
@@ -127,8 +138,8 @@
         }
 
         <div class="field">
-          <label for="ja-expiry">Berlaku sampai</label>
-          <input id="ja-expiry" name="expiresAt" type="date" [(ngModel)]="newExpiresAt" [attr.disabled]="locked ? '' : null" />
+          <label>Berlaku sampai</label>
+          <app-date-range-picker id="ja-expiry" [single]="true" [yearNav]="true" [from]="newExpiresAt" [max]="maxDay" [disabled]="locked" placeholder="Pilih tanggal" ariaLabel="Berlaku sampai" (rangeChange)="newExpiresAt = $event.from" />
           <small class="ja-field-hint">Tanggal di kolom <strong>Expires</strong> pada halaman API tokens Atlassian. Wajib diisi agar bisa diingatkan sebelum token habis.</small>
         </div>
 

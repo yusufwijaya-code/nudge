@@ -1,11 +1,14 @@
 // Package jira_account_holder keeps the central Jira account (email + API
-// token) in force: the one an admin saved in Admin › Akun Jira, else the
-// JIRA_EMAIL / JIRA_API_TOKEN pair from the environment. It has no
-// dependencies, so the Jira clients can read it without importing the admin
-// module (which depends on them through auth).
+// token) in force: the one an admin saved in Admin › Akun Jira. There is no
+// environment fallback; until an account exists nothing can call Jira as the
+// bot. It has no dependencies, so the Jira clients can read it without
+// importing the admin module (which depends on them through auth).
 package jira_account_holder
 
-import "sync/atomic"
+import (
+	"log"
+	"sync/atomic"
+)
 
 // Credential is an Atlassian email + API token.
 type Credential struct {
@@ -13,13 +16,15 @@ type Credential struct {
 	APIToken string
 }
 
-// override is what an admin saved, read by every Jira client on every request,
-// so a change applies at once, without a restart. Same registry style as
-// jira_client_dto.SetRules.
+// override is the account in force, read by every Jira client on every
+// request, so a change applies at once, without a restart. Same registry style
+// as jira_client_dto.SetRules.
 var override atomic.Pointer[Credential]
 
-// SetOverride installs the admin-saved credential; nil goes back to the
-// environment pair.
+// missingLogged makes "no account" a single log line instead of one per poll.
+var missingLogged atomic.Bool
+
+// SetOverride installs the account in force; nil removes it.
 func SetOverride(c *Credential) {
 	if c == nil {
 		override.Store(nil)
@@ -27,9 +32,10 @@ func SetOverride(c *Credential) {
 	}
 	cp := *c
 	override.Store(&cp)
+	missingLogged.Store(false)
 }
 
-// Override is the admin-saved credential, nil when none is in force.
+// Override is the account in force, nil when none is set.
 func Override() *Credential {
 	if c := override.Load(); c != nil {
 		cp := *c
@@ -38,11 +44,23 @@ func Override() *Credential {
 	return nil
 }
 
-// Current is the credential Jira calls authenticate with: the admin-saved
-// one when there is one, else the environment pair.
-func Current(envEmail, envToken string) (email, token string) {
+// Current is the credential Jira calls authenticate with as the bot. ok is
+// false when no account has been set up: the strings are then empty and Jira
+// will answer 401.
+func Current() (email, token string, ok bool) {
 	if c := override.Load(); c != nil {
-		return c.Email, c.APIToken
+		return c.Email, c.APIToken, true
 	}
-	return envEmail, envToken
+	return "", "", false
+}
+
+// Configured reports whether a central account is in force.
+func Configured() bool { return override.Load() != nil }
+
+// NoteMissing is what a background loop calls when it skips a cycle for lack of
+// an account: it logs once, until an account is set.
+func NoteMissing(component string) {
+	if missingLogged.CompareAndSwap(false, true) {
+		log.Printf("%s: no Jira account is set up yet; Jira polling is paused (an admin sets it in Admin > Akun Jira)", component)
+	}
 }

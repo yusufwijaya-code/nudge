@@ -1,4 +1,4 @@
-import { JIRA_TOKEN_WARN_DAYS, expiryDateLabel, expiryDistance, tokenExpiry } from './jira-token-expiry';
+import { JIRA_TOKEN_WARN_DAYS, expiryDateLabel, expiryDistance, expiryMaxDay, tokenExpiry } from './jira-token-expiry';
 
 describe('tokenExpiry', () => {
   // 25 Nov 2026, 10:00 WIB
@@ -47,5 +47,13 @@ describe('expiry labels', () => {
     expect(expiryDistance(5)).toBe('5 hari lagi');
     expect(expiryDistance(-1)).toBe('kemarin');
     expect(expiryDistance(-3)).toBe('3 hari lalu');
+  });
+});
+
+describe('expiryMaxDay', () => {
+  it('is the same day ten years ahead on the WIB calendar (the latest the server accepts)', () => {
+    expect(expiryMaxDay(new Date('2026-11-25T03:00:00Z'))).toBe('2036-11-25');
+    // 00:30 WIB on the 26th is still the 25th in UTC
+    expect(expiryMaxDay(new Date('2026-11-25T17:30:00Z'))).toBe('2036-11-26');
   });
 });

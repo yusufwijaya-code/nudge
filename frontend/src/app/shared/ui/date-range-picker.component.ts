@@ -79,6 +79,7 @@ interface DayCell {
       aria-haspopup="dialog"
       [attr.aria-expanded]="open()"
       [attr.aria-label]="ariaLabel() || null"
+      [disabled]="disabled()"
       (click)="toggle()"
       (keydown.escape)="close()"
     >
@@ -92,13 +93,23 @@ interface DayCell {
     @if (open()) {
       <div class="ui-date-popup" role="dialog" [attr.aria-label]="ariaLabel() || (single() ? 'Pilih tanggal' : 'Pilih rentang tanggal')" (keydown.escape)="close()">
         <div class="ui-date-head">
-          <button type="button" class="ui-date-nav" aria-label="Bulan sebelumnya" data-prev (click)="shift(-1)">
-            <app-icon name="chevron-left" [size]="16" />
-          </button>
+          <span class="ui-date-navgroup">
+            @if (yearNav()) {
+              <button type="button" class="ui-date-nav" aria-label="Tahun sebelumnya" data-prev-year (click)="shift(-12)">«</button>
+            }
+            <button type="button" class="ui-date-nav" aria-label="Bulan sebelumnya" data-prev (click)="shift(-1)">
+              <app-icon name="chevron-left" [size]="16" />
+            </button>
+          </span>
           <span class="ui-date-title">{{ title() }}</span>
-          <button type="button" class="ui-date-nav" aria-label="Bulan berikutnya" data-next (click)="shift(1)">
-            <app-icon name="chevron-right" [size]="16" />
-          </button>
+          <span class="ui-date-navgroup">
+            <button type="button" class="ui-date-nav" aria-label="Bulan berikutnya" data-next (click)="shift(1)">
+              <app-icon name="chevron-right" [size]="16" />
+            </button>
+            @if (yearNav()) {
+              <button type="button" class="ui-date-nav" aria-label="Tahun berikutnya" data-next-year (click)="shift(12)">»</button>
+            }
+          </span>
         </div>
         @if (!single()) {
           <p class="ui-date-step">{{ picking() ? 'Pilih tanggal selesai' : 'Pilih tanggal mulai' }}</p>
@@ -147,6 +158,10 @@ export class DateRangePickerComponent {
   ariaLabel = input<string>('');
   /** One date instead of a range; "Hapus" clears it (emits from ''). */
   single = input(false);
+  /** Not openable (e.g. a form that cannot be saved yet). */
+  disabled = input(false);
+  /** Adds jump-a-year buttons next to the month arrows, for dates that are a year or so away. */
+  yearNav = input(false);
   rangeChange = output<DateRange>();
 
   protected readonly weekHead = WEEK_HEAD;

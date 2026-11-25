@@ -251,8 +251,8 @@ func main() {
 			chatAppClient = c
 		}
 	}
-	operatorName := resolveOperatorName(context.Background(), registrationRepo, cfg.JiraEmail)
-	deliveryDeps := chat_delivery.Deps{Store: chatAppRepo, OperatorEmail: cfg.JiraEmail, OperatorName: operatorName, Log: chatLogRepo}
+	operatorName := resolveOperatorName(context.Background(), registrationRepo, cfg.OperatorEmail)
+	deliveryDeps := chat_delivery.Deps{Store: chatAppRepo, OperatorEmail: cfg.OperatorEmail, OperatorName: operatorName, Log: chatLogRepo}
 	deliveryDeps.Cards = chat_app_card.Build // phase 3: cards with action buttons on the app path
 	deliveryDeps.TextCards = chat_app_card.TextCard // the "/n-help" hint of a notice becomes a menu button
 	if chatAppClient != nil {
@@ -351,7 +351,7 @@ func main() {
 		}()
 	}
 
-	registrationService := registration_service.NewRegistrationService(jiraClientSvc, registrationRepo, deliveryRouter, cfg.JiraEmail)
+	registrationService := registration_service.NewRegistrationService(jiraClientSvc, registrationRepo, deliveryRouter, cfg.OperatorEmail)
 
 	authSessionRepo := auth_session_repository.NewAuthSessionRepository(db)
 	authSvc := auth_service.NewAuthService(&cfg, registrationService, registrationRepo, authSessionRepo)
@@ -400,7 +400,7 @@ func main() {
 	sprintReportHandler := sprint_report_handler.NewSprintReportHandler(sprintReportSvc, sprint_report_handler.WithBackfiller(sprintBackfillSvc))
 
 	adminDashboardSvc := admin_dashboard_service.NewAdminDashboardService(
-		registrationRepo, jiraCredentialSvc, deliveryRouter, cfg.JiraEmail,
+		registrationRepo, jiraCredentialSvc, deliveryRouter, cfg.OperatorEmail,
 		admin_dashboard_service.WithBoardNamer(boardSvc),
 		admin_dashboard_service.WithChatApp(chatAppRepo, chatAppClient != nil),
 	)
@@ -436,7 +436,7 @@ func main() {
 	chatAppRoutes.Activation = chat_app_activation.New(chat_app_activation.Deps{
 		States: chatAppRepo, OAuth: activationOAuth, Notify: deliveryRouter,
 		AppEnabled: chatAppClient != nil, OneClick: cfg.GoogleChatAppOneClick, GroupEnabled: chatGroupSvc != nil,
-		OperatorEmail: cfg.JiraEmail, OperatorName: operatorName,
+		OperatorEmail: cfg.OperatorEmail, OperatorName: operatorName,
 		AppURL: cfg.FrontendURL + cfg.BasePath, CookiePath: cfg.BasePath,
 	})
 	chatAppRoutes.AdminTarget = admin_dashboard_handler.AdminTarget(adminDashboardSvc)

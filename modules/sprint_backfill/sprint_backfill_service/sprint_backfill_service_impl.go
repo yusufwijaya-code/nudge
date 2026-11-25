@@ -11,6 +11,7 @@ import (
 	"nudge/modules/business_hours/business_hours_service"
 	"nudge/modules/issue_session/issue_session_dto"
 	"nudge/modules/issue_session/issue_session_repository"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/registration/registration_dto"
 )
@@ -88,6 +89,10 @@ func (s *sprintBackfillServiceImpl) userAndCredential(ctx context.Context, email
 }
 
 func (s *sprintBackfillServiceImpl) RunAll(ctx context.Context) int {
+	if !jira_account_holder.Configured() {
+		jira_account_holder.NoteMissing("sprint_backfill")
+		return 0
+	}
 	users, err := s.users.FindAll(ctx)
 	if err != nil {
 		log.Printf("sprint_backfill: listing users failed: %v", err)

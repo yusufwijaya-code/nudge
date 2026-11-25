@@ -7,9 +7,15 @@ import { JiraAccountService, JiraAccountStatus } from '../../../core/services/ji
 import { ConfirmService } from '../../../core/ui/confirm.service';
 import { ToastService } from '../../../core/ui/toast.service';
 
-const ENV: JiraAccountStatus = { source: 'env', email: 'yusuf.wijaya@esb.co.id', tokenHint: '••••••••abcd', encryptionReady: true, expiresAt: '' };
+// An account is set up but its token has no date yet.
+const ACCOUNT: JiraAccountStatus = {
+  source: 'database', email: 'yusuf.wijaya@esb.co.id', tokenHint: '••••••••abcd', encryptionReady: true, unreadable: false, expiresAt: '',
+  updatedBy: 'env-import', updatedDate: '2026-11-25T15:40:00Z',
+};
+// Nothing is set up: the bot cannot read Jira.
+const NONE: JiraAccountStatus = { source: 'none', email: '', tokenHint: '', encryptionReady: true, unreadable: false, expiresAt: '' };
 const SAVED: JiraAccountStatus = {
-  source: 'database', email: 'bot@esb.co.id', tokenHint: '••••••••WXYZ', encryptionReady: true, expiresAt: '2099-12-31',
+  source: 'database', email: 'bot@esb.co.id', tokenHint: '••••••••WXYZ', encryptionReady: true, unreadable: false, expiresAt: '2099-12-31',
   updatedBy: 'yusuf.wijaya@esb.co.id', updatedDate: '2026-11-25T14:30:00Z',
 };
 const YUSUF = { displayName: 'Yusuf Wijaya', emailAddress: 'yusuf.wijaya@esb.co.id', accountId: 'acc-1', active: true };
@@ -23,7 +29,7 @@ describe('JiraAccountComponent', () => {
   const q = (selector: string) => el().querySelector(selector);
   const component = () => fixture.componentInstance as any;
 
-  const create = (status: JiraAccountStatus = ENV) => {
+  const create = (status: JiraAccountStatus = ACCOUNT) => {
     api.status.and.returnValue(of(status));
     fixture = TestBed.createComponent(JiraAccountComponent);
     fixture.detectChanges();
@@ -57,14 +63,15 @@ describe('JiraAccountComponent', () => {
     create();
     expect(q('[data-email]')?.textContent).toContain('yusuf.wijaya@esb.co.id');
     expect(q('[data-hint]')?.textContent).toBe('••••••••abcd');
-    expect(q('[data-source]')?.textContent).toContain('Dari env server');
+    expect(q('[data-source]')?.textContent).toContain('Terpasang');
     expect(q('[data-account]')?.textContent).toBe('Yusuf Wijaya');
-    expect(q('[data-reset]')).toBeNull();
+    expect(q('[data-replace-title]')?.textContent).toContain('Ganti akun Jira');
+    expect(q('[data-none]')).toBeNull();
   });
 
-  it('shows who saved the account and offers to go back to env', () => {
+  it('shows who set the account up and offers to delete it', () => {
     create(SAVED);
-    expect(q('[data-source]')?.textContent).toContain('Disimpan admin');
+    expect(q('[data-source]')?.textContent).toContain('Terpasang');
     expect(q('[data-updated]')?.textContent).toContain('yusuf.wijaya@esb.co.id');
     expect(q('[data-reset]')).not.toBeNull();
   });
@@ -144,17 +151,18 @@ describe('JiraAccountComponent', () => {
   });
 
   it('blocks the form and says why when the server has no encryption key', () => {
-    create({ ...ENV, encryptionReady: false });
+    create({ ...NONE, encryptionReady: false });
     expect(q('[data-no-key]')?.textContent).toContain('CREDENTIAL_ENCRYPTION_KEY');
     expect((q('#ja-email') as HTMLInputElement).disabled).toBeTrue();
+    expect((q('#ja-expiry .ui-date-trigger') as HTMLButtonElement).disabled).toBeTrue();
     fill('bot@esb.co.id', 'tok');
     expect((q('[data-save]') as HTMLButtonElement).disabled).toBeTrue();
   });
 
-  it('goes back to the env account after confirmation', async () => {
+  it('deletes the account after confirmation, and then nothing is set up', async () => {
     create(SAVED);
     api.reset.and.returnValue(of(undefined));
-    api.status.and.returnValue(of(ENV));
+    api.status.and.returnValue(of(NONE));
     await component().onReset();
     expect(api.reset).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalled();
@@ -177,7 +185,7 @@ describe('JiraAccountComponent', () => {
     });
 
     it('asks to fill the date in when it is unknown', () => {
-      create(ENV);
+      create(ACCOUNT);
       expect(q('[data-expiry-unknown]')?.textContent).toContain('Belum diisi');
       expect(q('[data-expiry-hint]')?.textContent).toContain('Expires');
     });
@@ -193,12 +201,11 @@ describe('JiraAccountComponent', () => {
       expect((q('[data-expiry-pill]') as HTMLElement).className).toContain('expired');
     });
 
-    it('changes only the date of the token in force, e.g. the env account', () => {
-      create(ENV);
+    it('changes only the date of the token in force', () => {
+      create(ACCOUNT);
       api.setExpiry.and.returnValue(of({ ok: true }));
-      const input = q('#ja-expiry-edit') as HTMLInputElement;
-      input.value = '2027-10-26';
-      input.dispatchEvent(new Event('input'));
+      component().onExpiryPicked({ from: '2027-10-26', to: '' });
+      fixture.detectChanges();
       api.status.calls.reset();
 
       (q('[data-save-expiry]') as HTMLButtonElement).click();
@@ -210,10 +217,47 @@ describe('JiraAccountComponent', () => {
     });
 
     it('tells the admin when the date is refused', () => {
-      create(ENV);
+      create(ACCOUNT);
       api.setExpiry.and.returnValue(throwError(() => ({ status: 400 })));
       (q('[data-save-expiry]') as HTMLButtonElement).click();
       expect(toast.error).toHaveBeenCalledWith('Gagal menyimpan tanggal', 'Tanggal kedaluwarsa tidak valid.');
+    });
+  });
+
+  describe('no account set up', () => {
+    it('says so, hides the account details and does not ask Jira anything', () => {
+      create(NONE);
+      expect(q('[data-none]')?.textContent).toContain('Belum ada akun Jira');
+      expect(q('[data-source]')?.textContent).toContain('Belum diatur');
+      expect(q('[data-email]')).toBeNull();
+      expect(q('[data-check]')).toBeNull();
+      expect(q('[data-save-expiry]')).toBeNull();
+      expect(q('[data-reset]')).toBeNull();
+      expect(api.test).not.toHaveBeenCalled();
+    });
+
+    it('offers to set the account up', () => {
+      create(NONE);
+      expect(q('[data-replace-title]')?.textContent).toContain('Pasang akun Jira');
+      fill('bot@esb.co.id', 'tok');
+      expect((q('[data-save]') as HTMLButtonElement).disabled).toBeFalse();
+    });
+
+    it('explains an account that is stored but cannot be read', () => {
+      create({ ...NONE, unreadable: true });
+      expect(q('[data-unreadable]')?.textContent).toContain('tidak bisa dibaca');
+    });
+
+    it('checks the connection once an account has been set up', async () => {
+      create(NONE);
+      api.save.and.returnValue(of({ ok: true, account: YUSUF }));
+      api.status.and.returnValue(of(ACCOUNT));
+      fill('bot@esb.co.id', 'tok');
+      await component().onSave();
+      fixture.detectChanges();
+      expect(api.test).toHaveBeenCalledTimes(1);
+      expect(q('[data-none]')).toBeNull();
+      expect(q('[data-account]')?.textContent).toBe('Yusuf Wijaya');
     });
   });
 });

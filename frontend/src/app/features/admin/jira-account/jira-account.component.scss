@@ -5,6 +5,14 @@
   &.db { background: var(--success-soft); color: var(--success); }
 }
 
+.source-pill.none { background: var(--error-soft); color: var(--error-strong); }
+.ja-none {
+  display: flex; gap: 12px; align-items: flex-start; margin: 0 24px 20px; padding: 14px 16px;
+  border: 1px solid rgba(229, 72, 77, .35); border-radius: var(--radius); background: var(--error-soft); color: var(--text);
+  > app-icon { color: var(--error); flex: none; margin-top: 2px; }
+  span { line-height: 1.5; font-size: .9rem; small { display: block; margin-top: 4px; color: var(--text-muted); } }
+}
+
 .ja-skeleton { height: 96px; margin: 0 24px 24px; border-radius: var(--radius); }
 
 .ja-facts {

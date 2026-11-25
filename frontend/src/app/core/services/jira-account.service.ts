@@ -13,13 +13,15 @@ export interface JiraIdentity {
 
 /** The central Jira account the bot acts as (Admin › Akun Jira). The token itself is never sent. */
 export interface JiraAccountStatus {
-  /** 'database' = saved by an admin, 'env' = JIRA_EMAIL / JIRA_API_TOKEN on the server. */
-  source: 'database' | 'env';
+  /** 'database' = an account is set up here; 'none' = nothing is set up and the bot cannot read Jira. */
+  source: 'database' | 'none';
   email: string;
   /** "••••••••aB3f": only the last characters. */
   tokenHint: string;
   updatedBy?: string;
   updatedDate?: string;
+  /** An account is stored but cannot be decrypted (the encryption key changed): it is not in force. */
+  unreadable: boolean;
   /** False when the server has no CREDENTIAL_ENCRYPTION_KEY: a token cannot be stored. */
   encryptionReady: boolean;
   /** Day the token in force expires ("YYYY-MM-DD"), entered by an admin because Jira does not report it; "" = unknown. */
@@ -64,7 +66,7 @@ export class JiraAccountService {
     return this.http.get<{ users: ExpiringUser[]; warnDays: number }>(`${this.base}/expiring-users`);
   }
 
-  /** Removes the saved account: the server's env credential is used again. */
+  /** Removes the account: the bot cannot read Jira until a new one is saved. */
   reset(): Observable<void> {
     return this.http.delete<void>(this.base);
   }

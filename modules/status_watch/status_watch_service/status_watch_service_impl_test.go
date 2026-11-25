@@ -12,6 +12,7 @@ import (
 	"nudge/modules/business_hours/business_hours_service"
 	"nudge/modules/google_chat_notifier/google_chat_notifier_dto"
 	"nudge/modules/issue_session/issue_session_dto"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/registration/registration_dto"
 	"nudge/modules/status_watch/status_watch_dto"
@@ -251,9 +252,9 @@ func TestRunOnce_LeavingTrackedStatusAddsTheBudgetLine(t *testing.T) {
 		used                int64
 		want                string
 	}{
-		{"finished early", "CORE-1", "CODE REVIEW", "Code Completed", 2, 3600, "⏱ Selesai 1:00:00 lebih awal dari budget 2:00:00"},
-		{"back to To Do", "OMS-2", "Code Process", "To Do", 2, 3600, "⏱ Waktu terpakai 1:00:00 dari budget 2:00:00"},
-		{"over budget", "OMS-3", "Code Process", "Code Review", 1, 7200, "⏱ Waktu terpakai 2:00:00 dari budget 1:00:00 (lewat 1:00:00)"},
+		{"finished early", "CORE-1", "CODE REVIEW", "Code Completed", 2, 3600, "⏱ Selesai 1 jam lebih awal dari budget 2 jam"},
+		{"back to To Do", "OMS-2", "Code Process", "To Do", 2, 3600, "⏱ Waktu terpakai 1 jam dari budget 2 jam"},
+		{"over budget", "OMS-3", "Code Process", "Code Review", 1, 7200, "⏱ Waktu terpakai 2 jam dari budget 1 jam (lewat 1 jam)"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -400,5 +401,23 @@ func TestRunOnce_SearchErrorKeepsTheCursor(t *testing.T) {
 	}
 	if f.jira.windows[2] != f.jira.windows[1] {
 		t.Errorf("window after a failure = %v, want unchanged %v", f.jira.windows[2], f.jira.windows[1])
+	}
+}
+
+// Without a Jira account a cycle does nothing: Jira is not asked and no
+// snapshot or notice is produced.
+func TestRunOnce_PausesQuietlyWithoutAJiraAccount(t *testing.T) {
+	prev := jira_account_holder.Override()
+	jira_account_holder.SetOverride(nil)
+	t.Cleanup(func() { jira_account_holder.SetOverride(prev) })
+
+	f := newFixture()
+	f.build()
+	f.jira.issues = []jira_client_dto.Issue{ticket("OMS-1", "To Do", "acc-dev")}
+	if err := f.svc.RunOnce(context.Background()); err != nil {
+		t.Fatalf("RunOnce must not fail without an account: %v", err)
+	}
+	if len(f.dm.sent) != 0 || len(f.snaps.rows) != 0 {
+		t.Errorf("nothing may happen without an account: sent %d, snapshots %v", len(f.dm.sent), f.snaps.rows)
 	}
 }

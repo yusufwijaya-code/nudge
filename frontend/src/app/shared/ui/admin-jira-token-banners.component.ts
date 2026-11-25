@@ -15,7 +15,17 @@ import { JiraTokenBannerComponent } from './jira-token-banner.component';
   imports: [RouterLink, IconComponent, JiraTokenBannerComponent],
   template: `
     @if (account(); as a) {
-      <app-jira-token-banner subject="bot" [email]="a.email" [expiresAt]="a.expiresAt" link="/admin/jira-account" linkLabel="Ganti token" />
+      @if (a.source === 'none') {
+        <section class="token-banner expired" data-no-account role="status">
+          <app-icon name="alert-circle" [size]="20" />
+          <p>
+            <strong>Belum ada akun Jira untuk bot.</strong> Polling tiket, reminder, dan geser status tidak berjalan sampai akun diisi.
+          </p>
+          <a class="btn btn-primary btn-sm" routerLink="/admin/jira-account">Isi akun Jira</a>
+        </section>
+      } @else {
+        <app-jira-token-banner subject="bot" [email]="a.email" [expiresAt]="a.expiresAt" link="/admin/jira-account" linkLabel="Ganti token" />
+      }
     }
     @if (users().length; as n) {
       <section class="token-banner" [class.expired]="anyExpired()" data-users role="status">

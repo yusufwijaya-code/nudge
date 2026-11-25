@@ -14,6 +14,7 @@ import (
 	"nudge/modules/google_chat_notifier/google_chat_notifier_service"
 	"nudge/modules/issue_session/issue_session_dto"
 	"nudge/modules/issue_session/issue_session_service"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/registration/registration_dto"
 	"nudge/modules/status_watch/status_watch_dto"
@@ -115,6 +116,10 @@ func (s *statusWatchServiceImpl) registeredUsers(ctx context.Context) error {
 }
 
 func (s *statusWatchServiceImpl) RunOnce(ctx context.Context) error {
+	if !jira_account_holder.Configured() {
+		jira_account_holder.NoteMissing("status_watch")
+		return nil
+	}
 	started := s.now()
 	if err := s.registeredUsers(ctx); err != nil {
 		return err
