@@ -17,6 +17,10 @@ export interface UserRow {
   chatAppActivatedDate: string | null;
   chatSender: 'nudge' | 'operator' | null;
   effectiveChatSender: 'nudge' | 'operator';
+  /** May use the admin panel (the owner, or promoted by the owner). */
+  isAdmin: boolean;
+  /** The account only the owner can change. */
+  isOwner: boolean;
 }
 
 export interface ListUsersResponse {
@@ -97,6 +101,11 @@ export class AdminService {
   /** The user's boards, same shape as the navbar picker's GET /boards. */
   listUserBoards(userId: number): Observable<BoardsResponse> {
     return this.http.get<BoardsResponse>(`${environment.apiBasePath}/api/dashboard/admin/users/${userId}/boards`);
+  }
+
+  /** Owner only: promote a user to admin, or take the role away. */
+  setAdmin(userId: number, admin: boolean): Observable<{ ok: boolean; isAdmin: boolean }> {
+    return this.http.put<{ ok: boolean; isAdmin: boolean }>(`${environment.apiBasePath}/api/dashboard/admin/users/${userId}/admin`, { admin });
   }
 
   toggleActive(userId: number, active: boolean): Observable<unknown> {

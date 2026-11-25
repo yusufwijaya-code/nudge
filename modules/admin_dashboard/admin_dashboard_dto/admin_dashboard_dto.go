@@ -19,6 +19,9 @@ type UserRow struct {
 	ChatAppActivatedDate *time.Time `json:"chatAppActivatedDate"`
 	ChatSender           *string    `json:"chatSender"`
 	EffectiveChatSender  string     `json:"effectiveChatSender"`
+	// IsAdmin: may use the admin panel; IsOwner: the account only the owner can change.
+	IsAdmin bool `json:"isAdmin"`
+	IsOwner bool `json:"isOwner"`
 }
 
 // BroadcastResult reports the outcome of BroadcastMessage — FailedEmails is

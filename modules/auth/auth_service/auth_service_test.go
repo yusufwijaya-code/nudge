@@ -137,7 +137,6 @@ func (f *fakeRegistrationRepoForAuth) UpdateGoogleChatDMSpaceID(ctx context.Cont
 	return nil
 }
 
-
 func (f *fakeRegistrationRepoForAuth) FindAll(ctx context.Context) ([]registration_dto.User, error) {
 	return nil, nil
 }

@@ -16,7 +16,7 @@ const user = (userId: number, flagActive: boolean, hasCredential: boolean): User
   chatAppActivated: userId === 1,
   chatAppActivatedDate: null,
   chatSender: null,
-  effectiveChatSender: 'operator',
+  effectiveChatSender: 'operator', isAdmin: false, isOwner: false,
 });
 
 describe('AdminOverviewComponent', () => {

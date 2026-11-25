@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgFor, NgIf } from '@angular/common';
 import { AdminService, UserRow, formatActivationDate } from '../../../core/services/admin.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { ChatAppService } from '../../../core/services/chat-app.service';
 import { ConfirmService } from '../../../core/ui/confirm.service';
 import { ToastService } from '../../../core/ui/toast.service';
@@ -36,6 +37,17 @@ export class AdminUsersComponent implements OnInit {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private chatApp = inject(ChatAppService);
+  private auth = inject(AuthService);
+
+  /** Only the owner promotes admins and may change the owner's own account. */
+  protected get viewerIsOwner(): boolean {
+    return !!this.auth.currentUser$.value?.isOwner;
+  }
+
+  /** The owner's account is read-only for every other admin. */
+  protected locked(user: UserRow): boolean {
+    return user.isOwner && !this.viewerIsOwner;
+  }
 
   /** The operator account's display name (AC4.4), from the status endpoint. */
   protected operatorName(): string {
@@ -156,6 +168,36 @@ export class AdminUsersComponent implements OnInit {
       error: (err) => {
         this.rowActionInFlight[user.userId] = false;
         this.rowMessage[user.userId] = err?.error?.error ?? 'Gagal menghapus user';
+      },
+    });
+  }
+
+  /** Owner only: promote the user to admin, or take the role away. */
+  protected async onToggleAdmin(user: UserRow): Promise<void> {
+    const promote = !user.isAdmin;
+    const confirmed = await this.confirm.ask({
+      title: promote ? 'Jadikan admin?' : 'Cabut peran admin?',
+      message: promote
+        ? `${user.email} akan mendapat semua hak admin, termasuk mengatur user lain, aturan board, dan akun Jira.`
+        : `${user.email} tidak lagi bisa membuka panel admin.`,
+      points: promote ? ['Admin tidak bisa mengubah, menonaktifkan, atau menghapus akun pemilik.', 'Hanya pemilik yang bisa menjadikan atau mencabut admin.'] : undefined,
+      confirmText: promote ? 'Jadikan admin' : 'Cabut admin',
+      tone: promote ? 'primary' : 'danger',
+      icon: 'shield',
+    });
+    if (!confirmed) {
+      return;
+    }
+    this.startRowAction(user);
+    this.adminService.setAdmin(user.userId, promote).subscribe({
+      next: () => {
+        this.rowActionInFlight[user.userId] = false;
+        this.toast.success(promote ? 'Dijadikan admin' : 'Peran admin dicabut', user.email);
+        this.loadUsers();
+      },
+      error: (err) => {
+        this.rowActionInFlight[user.userId] = false;
+        this.rowMessage[user.userId] = err?.error?.error ?? 'Gagal mengubah peran admin';
       },
     });
   }

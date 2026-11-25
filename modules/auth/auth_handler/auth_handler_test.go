@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nudge/config"
+	"nudge/modules/admin_roster/admin_roster_holder"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_middleware"
 	"nudge/modules/auth/auth_service"
@@ -319,5 +320,29 @@ func TestCallback_RunsLoginHookWithClaims(t *testing.T) {
 
 	if w.Code != http.StatusFound || gotUserID != 5 || gotPicture != "https://lh3.googleusercontent.com/a/x=s96-c" {
 		t.Errorf("status=%d hook userID=%d picture=%q", w.Code, gotUserID, gotPicture)
+	}
+}
+
+func TestMe_ReportsAPromotedAdminAsAdminButNotAsOwner(t *testing.T) {
+	admin_roster_holder.SetOwner("yusuf.wijaya@esb.co.id")
+	admin_roster_holder.SetAdmins([]string{"keva.galih@esb.co.id"})
+	t.Cleanup(func() { admin_roster_holder.SetOwner(""); admin_roster_holder.SetAdmins(nil) })
+	handler := NewAuthHandler(&fakeAuthServiceForHandler{}, &config.AppConfig{BasePath: "/nudge", AdminEmail: "yusuf.wijaya@esb.co.id"})
+	me := func(email string) string {
+		w, c := newTestContext()
+		c.Request = httptest.NewRequest("GET", "/nudge/api/auth/me", nil)
+		c.Set(auth_middleware.CurrentUserKey, auth_dto.Session{Email: email, FlagActive: true})
+		handler.Me(c)
+		return w.Body.String()
+	}
+
+	if body := me("keva.galih@esb.co.id"); !strings.Contains(body, `"isAdmin":true`) || !strings.Contains(body, `"isOwner":false`) {
+		t.Errorf("promoted admin: %s, want isAdmin true and isOwner false", body)
+	}
+	if body := me("yusuf.wijaya@esb.co.id"); !strings.Contains(body, `"isAdmin":true`) || !strings.Contains(body, `"isOwner":true`) {
+		t.Errorf("owner: %s, want both true", body)
+	}
+	if body := me("dev@esb.co.id"); !strings.Contains(body, `"isAdmin":false`) || !strings.Contains(body, `"isOwner":false`) {
+		t.Errorf("other user: %s, want both false", body)
 	}
 }

@@ -6,6 +6,8 @@ import { environment } from '../../../environments/environment';
 export interface CurrentUser {
   email: string;
   isAdmin: boolean;
+  /** The owner: may promote admins, and is the account other admins cannot change. */
+  isOwner?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

@@ -72,6 +72,8 @@
                 <div>
                   <strong>{{ user.email }}</strong>
                   <small *ngIf="user.userName">{{ user.userName }}</small>
+                  <span class="role-badge owner" *ngIf="user.isOwner" data-badge="owner">Pemilik</span>
+                  <span class="role-badge admin" *ngIf="user.isAdmin && !user.isOwner" data-badge="admin">Admin</span>
                 </div>
               </div>
             </td>
@@ -81,7 +83,7 @@
                 <input
                   type="text"
                   [(ngModel)]="jiraAccountIdDrafts[user.userId]"
-                  [disabled]="rowActionInFlight[user.userId]"
+                  [disabled]="rowActionInFlight[user.userId] || locked(user)"
                   placeholder="Belum diisi"
                   aria-label="Jira Account ID"
                 />
@@ -91,7 +93,7 @@
                   title="Simpan ID"
                   aria-label="Simpan ID"
                   (click)="onSaveJiraAccountId(user)"
-                  [disabled]="rowActionInFlight[user.userId] || jiraAccountIdDrafts[user.userId] === user.jiraAccountId"
+                  [disabled]="rowActionInFlight[user.userId] || locked(user) || jiraAccountIdDrafts[user.userId] === user.jiraAccountId"
                 >
                   <app-icon name="check" [size]="16" />
                 </button>
@@ -106,7 +108,8 @@
                   type="button"
                   class="btn btn-sm btn-danger-ghost"
                   (click)="onDeleteCredential(user)"
-                  [disabled]="rowActionInFlight[user.userId]"
+                  [disabled]="rowActionInFlight[user.userId] || locked(user)"
+                  [attr.title]="locked(user) ? 'Akun pemilik hanya bisa diubah oleh pemilik' : null"
                 >
                   Hapus Credential
                 </button>
@@ -128,7 +131,8 @@
                   [class.btn-soft]="!user.flagActive"
                   [class.btn-ghost]="user.flagActive"
                   (click)="onToggleActive(user)"
-                  [disabled]="rowActionInFlight[user.userId]"
+                  [disabled]="rowActionInFlight[user.userId] || locked(user)"
+                  [attr.title]="locked(user) ? 'Akun pemilik hanya bisa diubah oleh pemilik' : null"
                 >
                   <app-icon name="power" [size]="14" /> {{ user.flagActive ? 'Nonaktifkan' : 'Aktifkan' }}
                 </button>
@@ -138,9 +142,21 @@
                   title="Hapus user"
                   aria-label="Hapus user"
                   (click)="onDeleteUser(user)"
-                  [disabled]="rowActionInFlight[user.userId]"
+                  [disabled]="rowActionInFlight[user.userId] || locked(user)"
                 >
                   <app-icon name="trash" [size]="16" />
+                </button>
+                <button
+                  *ngIf="viewerIsOwner && !user.isOwner"
+                  type="button"
+                  class="btn btn-sm"
+                  [class.btn-soft]="!user.isAdmin"
+                  [class.btn-ghost]="user.isAdmin"
+                  data-toggle-admin
+                  (click)="onToggleAdmin(user)"
+                  [disabled]="rowActionInFlight[user.userId]"
+                >
+                  <app-icon name="shield" [size]="14" /> {{ user.isAdmin ? 'Cabut Admin' : 'Jadikan Admin' }}
                 </button>
               </div>
               <div class="msg error" *ngIf="rowMessage[user.userId]">{{ rowMessage[user.userId] }}</div>

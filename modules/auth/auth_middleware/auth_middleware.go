@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nudge/config"
+	"nudge/modules/admin_roster/admin_roster_holder"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_service"
 )
@@ -61,7 +62,9 @@ func AdminMiddleware(cfg *config.AppConfig) gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
-		if session.(auth_dto.Session).Email != cfg.AdminEmail {
+		email := session.(auth_dto.Session).Email
+		// The owner (ADMIN_EMAIL), or a user the owner promoted (Admin > User).
+		if email != cfg.AdminEmail && !admin_roster_holder.IsAdmin(email) {
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}

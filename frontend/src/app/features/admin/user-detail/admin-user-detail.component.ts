@@ -6,6 +6,7 @@ import { ADMIN_TARGET_USER_ID, AdminUserScope, AdminUserSettingsApi } from '../.
 import { SETTINGS_MODE, SettingsApi, SettingsScope } from '../../../core/services/settings-api';
 import { ToastService } from '../../../core/ui/toast.service';
 import { IconComponent } from '../../../shared/ui/icon.component';
+import { AuthService } from '../../../core/services/auth.service';
 import { UserAvatarComponent, adminUserAvatarUrl } from '../../../shared/ui/user-avatar.component';
 import { SelectComponent, SelectOption } from '../../../shared/ui/select.component';
 import { ChatSenderCardComponent } from '../../dashboard/settings/chat-sender-card.component';
@@ -36,6 +37,12 @@ export class AdminUserDetailComponent implements OnInit {
   private adminService = inject(AdminService);
   private toast = inject(ToastService);
   protected userId = inject(ADMIN_TARGET_USER_ID);
+  private auth = inject(AuthService);
+
+  /** Only the owner can change the owner's own account. */
+  protected get viewerIsOwner(): boolean {
+    return !!this.auth.currentUser$.value?.isOwner;
+  }
   protected scope = inject(AdminUserScope);
 
   protected user = signal<UserRow | null>(null);
