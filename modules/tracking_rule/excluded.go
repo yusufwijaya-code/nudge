@@ -75,14 +75,14 @@ func (e ExcludedSchedule) Windows() []business_hours_dto.ExcludedWindow {
 		if !ok || d.Minutes <= 0 {
 			continue
 		}
-		out = append(out, business_hours_dto.ExcludedWindow{Name: "Daily Stand Up", Weekday: time.Weekday(d.Weekday), StartMinute: start, Minutes: d.Minutes})
+		out = append(out, business_hours_dto.ExcludedWindow{Name: "Daily Stand Up", Kind: business_hours_dto.DSUKind, Weekday: time.Weekday(d.Weekday), StartMinute: start, Minutes: d.Minutes})
 	}
 	for _, r := range e.Rituals {
 		start, ok := parseClock(r.Start)
 		if !r.Enabled || !ok || r.Minutes <= 0 {
 			continue
 		}
-		w := business_hours_dto.ExcludedWindow{Name: r.Name, Weekday: time.Weekday(r.Weekday), StartMinute: start, Minutes: r.Minutes}
+		w := business_hours_dto.ExcludedWindow{Name: r.Name, Kind: business_hours_dto.RitualKind, Weekday: time.Weekday(r.Weekday), StartMinute: start, Minutes: r.Minutes}
 		if r.Frequency == FrequencySprintWeek {
 			w.SprintWeek = r.SprintWeek
 		}

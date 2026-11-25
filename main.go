@@ -78,6 +78,7 @@ import (
 	"nudge/modules/user_leave/user_leave_service"
 	"nudge/modules/user_setting/user_setting_repository"
 	"nudge/modules/user_setting/user_setting_service"
+	"nudge/modules/work_calendar"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -482,6 +483,8 @@ func main() {
 	router := SetupRouter(&cfg, authSvc, authHandler, userDashboardHandler, adminDashboardHandler, sprintReportHandler, adminUserSettings, userAvatarHandler, user_leave_handler.NewUserLeaveHandler(userLeaveSvc),
 		admin_roster.ProtectOwner(adminRosterRepo.FindEmail))
 	MountAdminRoster(router, &cfg, authSvc, admin_roster.NewHandler(adminRosterSvc))
+	// Kalender: holidays, leave, lunch and the board's DSU / special activities.
+	MountWorkCalendar(router, &cfg, authSvc, work_calendar.NewHandler(work_calendar.NewService(holidayCalendar, userLeaveSvc, boardSvc, businessHoursSvc)))
 
 	chatAppRoutes := ChatAppRoutes{}
 	if chatAppClient != nil && cfg.GoogleChatAppProjectNumber != "" {

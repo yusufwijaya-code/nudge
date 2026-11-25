@@ -8,24 +8,25 @@ import (
 	"nudge/config"
 	"nudge/modules/admin_dashboard"
 	"nudge/modules/admin_dashboard/admin_dashboard_handler"
+	"nudge/modules/admin_roster"
 	"nudge/modules/auth"
 	"nudge/modules/auth/auth_handler"
 	"nudge/modules/auth/auth_middleware"
 	"nudge/modules/auth/auth_service"
-	"nudge/modules/chat_app_activation"
 	"nudge/modules/board_scope"
-	"nudge/modules/issue_create/issue_create_handler"
+	"nudge/modules/chat_app_activation"
 	"nudge/modules/chat_log/chat_log_handler"
+	"nudge/modules/issue_create/issue_create_handler"
+	"nudge/modules/jira_account"
 	"nudge/modules/sprint_report"
 	"nudge/modules/sprint_report/sprint_report_handler"
-	"nudge/modules/admin_roster"
-	"nudge/modules/jira_account"
 	"nudge/modules/tracking_rule"
 	"nudge/modules/user_avatar/user_avatar_handler"
 	"nudge/modules/user_dashboard"
 	"nudge/modules/user_dashboard/user_dashboard_handler"
 	"nudge/modules/user_leave"
 	"nudge/modules/user_leave/user_leave_handler"
+	"nudge/modules/work_calendar"
 )
 
 // SetupRouter mounts every route under cfg.BasePath — labcup.tech hosts
@@ -165,6 +166,13 @@ func MountIssueCreate(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service
 	api := r.Group(cfg.BasePath + "/api/dashboard")
 	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
 	issue_create_handler.Routes(api, h)
+}
+
+// MountWorkCalendar mounts the Kalender page's data (any logged-in user).
+func MountWorkCalendar(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *work_calendar.Handler) {
+	api := r.Group(cfg.BasePath + "/api/dashboard")
+	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
+	work_calendar.UserRoutes(api, h)
 }
 
 // MountAdminRoster mounts promote/demote admin (Admin > User). The route needs

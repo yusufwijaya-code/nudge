@@ -272,8 +272,13 @@ type Credential struct {
 
 // StartTime is the sprint's start date; ok is false when Jira gave none or it
 // is not a date ("2026-11-04T02:00:00.000Z", or with an offset).
-func (s SprintRef) StartTime() (time.Time, bool) {
-	raw := strings.TrimSpace(s.StartDate)
+func (s SprintRef) StartTime() (time.Time, bool) { return parseSprintDate(s.StartDate) }
+
+// EndTime is the sprint's end date; ok is false when Jira gave none.
+func (s SprintRef) EndTime() (time.Time, bool) { return parseSprintDate(s.EndDate) }
+
+func parseSprintDate(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return time.Time{}, false
 	}
