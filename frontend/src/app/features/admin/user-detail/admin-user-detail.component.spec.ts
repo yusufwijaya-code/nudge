@@ -2,9 +2,10 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { Component } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
-import { of, throwError } from 'rxjs';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 import { AdminUserDetailComponent } from './admin-user-detail.component';
 import { ChatAppService } from '../../../core/services/chat-app.service';
+import { AuthService, CurrentUser } from '../../../core/services/auth.service';
 import { AdminService, UserRow } from '../../../core/services/admin.service';
 import { AdminUserSettingsApi } from '../../../core/services/admin-user-settings';
 import { SETTINGS_MODE, SettingsApi } from '../../../core/services/settings-api';
@@ -25,17 +26,19 @@ const USER: UserRow = {
   chatAppActivated: false,
   chatAppActivatedDate: null,
   chatSender: null,
-  effectiveChatSender: 'operator',
+  effectiveChatSender: 'operator', isAdmin: false, isOwner: false,
 };
 
 describe('AdminUserDetailComponent', () => {
   let fixture: ComponentFixture<AdminUserDetailComponent>;
   let adminService: jasmine.SpyObj<AdminService>;
+  let me: BehaviorSubject<CurrentUser | null>;
   const el = () => fixture.nativeElement as HTMLElement;
 
   beforeEach(async () => {
     adminService = jasmine.createSpyObj('AdminService', ['getUser', 'listUserBoards', 'toggleActive', 'editJiraAccountId']);
     adminService.listUserBoards.and.returnValue(of({ boards: [] }));
+    me = new BehaviorSubject<CurrentUser | null>({ email: 'yusuf.wijaya@esb.co.id', isAdmin: true, isOwner: true });
 
     await TestBed.configureTestingModule({
       imports: [AdminUserDetailComponent],
@@ -44,6 +47,7 @@ describe('AdminUserDetailComponent', () => {
         provideHttpClient(),
         { provide: ChatAppService, useValue: { load: () => of({ enabled: false }), activateUrl: () => '' } },
         { provide: AdminService, useValue: adminService },
+        { provide: AuthService, useValue: { currentUser$: me } },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: '12' }) } } },
       ],
     })
@@ -97,5 +101,41 @@ describe('AdminUserDetailComponent', () => {
 
     (el().querySelector('.profile-grid button') as HTMLButtonElement).click();
     expect(adminService.toggleActive).toHaveBeenCalledWith(12, false);
+  });
+
+  describe('the owner account', () => {
+    const OWNER: UserRow = { ...USER, userId: 1, email: 'yusuf.wijaya@esb.co.id', isOwner: true, isAdmin: true };
+
+    it('is read-only for an admin who is not the owner', async () => {
+      me.next({ email: 'keva.galih@esb.co.id', isAdmin: true, isOwner: false });
+      adminService.getUser.and.returnValue(of(OWNER));
+      fixture.detectChanges();
+      await fixture.whenStable(); // ngModel applies [disabled] after a microtask
+      fixture.detectChanges();
+
+      expect(el().querySelector('[data-owner-lock]')!.textContent).toContain('hanya pemilik yang bisa mengubahnya');
+      expect((el().querySelector('.profile-grid button') as HTMLButtonElement).disabled).toBeTrue();
+      expect((el().querySelector('.inline-edit input') as HTMLInputElement).disabled).toBeTrue();
+      expect(el().querySelector('[data-owner-settings]')!.classList).toContain('locked');
+      expect(el().querySelector('[data-owner-settings]')!.hasAttribute('inert')).toBeTrue();
+    });
+
+    it('is editable by the owner himself', () => {
+      adminService.getUser.and.returnValue(of(OWNER));
+      fixture.detectChanges();
+
+      expect(el().querySelector('[data-owner-lock]')).toBeNull();
+      expect((el().querySelector('.profile-grid button') as HTMLButtonElement).disabled).toBeFalse();
+      expect(el().querySelector('[data-owner-settings]')!.classList).not.toContain('locked');
+    });
+
+    it('does not lock the page of another user', () => {
+      me.next({ email: 'keva.galih@esb.co.id', isAdmin: true, isOwner: false });
+      adminService.getUser.and.returnValue(of(USER));
+      fixture.detectChanges();
+
+      expect(el().querySelector('[data-owner-lock]')).toBeNull();
+      expect((el().querySelector('.profile-grid button') as HTMLButtonElement).disabled).toBeFalse();
+    });
   });
 });

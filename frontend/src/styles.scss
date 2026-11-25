@@ -646,6 +646,10 @@ input:checked + .check-box {
   font-size: 0.86rem;
   app-icon { flex-shrink: 0; }
 }
+// The owner's page, seen by another admin: readable, not changeable.
+.owner-readonly { display: contents; }
+.owner-readonly.locked { display: block; opacity: 0.6; pointer-events: none; user-select: none; }
+.admin-editing-banner.owner-lock { background: var(--primary-soft); border-color: var(--primary-ring); color: var(--primary-strong); }
 .profile-card { padding: 22px 24px; }
 .profile-head {
   display: flex;
@@ -860,6 +864,7 @@ tr.clickable:hover td { background: var(--surface-2); }
   color: var(--text-muted);
 
   &.admin { background: var(--accent-soft); border-color: #ffd8a1; color: #b4630a; }
+  &.owner { background: var(--primary-soft); border-color: var(--primary-ring); color: var(--primary-strong); }
 }
 
 /* ==========================================================================

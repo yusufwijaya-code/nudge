@@ -18,6 +18,7 @@ import (
 	"nudge/modules/chat_log/chat_log_handler"
 	"nudge/modules/sprint_report"
 	"nudge/modules/sprint_report/sprint_report_handler"
+	"nudge/modules/admin_roster"
 	"nudge/modules/jira_account"
 	"nudge/modules/tracking_rule"
 	"nudge/modules/user_avatar/user_avatar_handler"
@@ -42,6 +43,8 @@ func SetupRouter(
 	adminUserSettings *user_dashboard_handler.SettingsHandler,
 	userAvatars *user_avatar_handler.UserAvatarHandler,
 	userLeaves *user_leave_handler.UserLeaveHandler,
+	// adminGuards run on every admin route that carries :userID (the owner guard).
+	adminGuards ...gin.HandlerFunc,
 ) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
@@ -76,9 +79,11 @@ func SetupRouter(
 	dashboardAdmin := base.Group("/dashboard/admin")
 	dashboardAdmin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
 	dashboardAdmin.Use(auth_middleware.AdminMiddleware(cfg))
+	dashboardAdmin.Use(adminGuards...)
 
 	apiDashboardAdmin := dashboardAPI.Group("/admin")
 	apiDashboardAdmin.Use(auth_middleware.AdminMiddleware(cfg))
+	apiDashboardAdmin.Use(adminGuards...)
 
 	admin_dashboard.Router(dashboardAdmin, apiDashboardAdmin, adminDashboardHandler, adminUserSettings)
 	apiDashboardAdmin.GET("/users/:userID/avatar", userAvatars.ForUser)
@@ -160,6 +165,14 @@ func MountIssueCreate(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service
 	api := r.Group(cfg.BasePath + "/api/dashboard")
 	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
 	issue_create_handler.Routes(api, h)
+}
+
+// MountAdminRoster mounts promote/demote admin (Admin > User). The route needs
+// an admin; the service lets only the owner use it.
+func MountAdminRoster(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *admin_roster.Handler) {
+	admin := r.Group(cfg.BasePath + "/api/dashboard/admin")
+	admin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg), auth_middleware.AdminMiddleware(cfg))
+	admin_roster.AdminRoutes(admin, h)
 }
 
 // MountJiraAccount mounts Admin › Akun Jira (admin only): the central Jira

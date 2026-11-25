@@ -109,6 +109,9 @@ var jiraAccountExpirySQL string
 //go:embed 0025_tracking_rule_excluded.sql
 var trackingRuleExcludedSQL string
 
+//go:embed 0026_user_is_admin.sql
+var userIsAdminSQL string
+
 // mysqlDeadlockErrNo / mysqlLockWaitTimeoutErrNo are retried: go test runs
 // every package in parallel and each one calls Apply against the same
 // schema, so concurrent DDL/backfill can collide. Every step is
@@ -240,6 +243,10 @@ func apply(db *sql.DB) error {
 	}
 	// Aturan Board › Jadwal yang tidak dihitung — one ADD COLUMN.
 	if err := addColumnIfNotExists(db, trackingRuleExcludedSQL); err != nil {
+		return err
+	}
+	// Admin roster — one ADD COLUMN on ms_user.
+	if err := addColumnIfNotExists(db, userIsAdminSQL); err != nil {
 		return err
 	}
 	// The new toggle starts ON when either old toggle was ON — exactly once

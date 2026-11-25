@@ -13,9 +13,9 @@ describe('BroadcastComponent', () => {
     adminService = jasmine.createSpyObj('AdminService', ['broadcast', 'listUsers']);
     adminService.listUsers.and.returnValue(of({
       users: [
-        { userId: 1, email: 'a@x.com', userName: '', flagActive: true, createdDate: '', jiraAccountId: '', hasCredential: false, credentialMasked: '', chatAppActivated: true, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'nudge' as const },
-        { userId: 2, email: 'b@x.com', userName: '', flagActive: true, createdDate: '', jiraAccountId: '', hasCredential: false, credentialMasked: '', chatAppActivated: false, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'operator' as const },
-        { userId: 3, email: 'c@x.com', userName: '', flagActive: false, createdDate: '', jiraAccountId: '', hasCredential: false, credentialMasked: '', chatAppActivated: false, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'operator' as const },
+        { userId: 1, email: 'a@x.com', userName: '', flagActive: true, createdDate: '', jiraAccountId: '', hasCredential: false, credentialMasked: '', chatAppActivated: true, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'nudge' as const, isAdmin: false, isOwner: false },
+        { userId: 2, email: 'b@x.com', userName: '', flagActive: true, createdDate: '', jiraAccountId: '', hasCredential: false, credentialMasked: '', chatAppActivated: false, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'operator' as const, isAdmin: false, isOwner: false },
+        { userId: 3, email: 'c@x.com', userName: '', flagActive: false, createdDate: '', jiraAccountId: '', hasCredential: false, credentialMasked: '', chatAppActivated: false, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'operator' as const, isAdmin: false, isOwner: false },
       ],
     }));
     confirmService = jasmine.createSpyObj('ConfirmService', ['ask']);

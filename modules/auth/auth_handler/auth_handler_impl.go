@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nudge/config"
+	"nudge/modules/admin_roster/admin_roster_holder"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_middleware"
 	"nudge/modules/auth/auth_service"
@@ -26,7 +27,7 @@ const (
 	// mid-flow on a new/unverified OAuth app) on top of the normal consent
 	// round-trip — confirmed live: a 5-minute window expired mid-challenge
 	// and broke an otherwise-successful login.
-	stateCookieMaxAge   = 15 * 60        // 15 minutes
+	stateCookieMaxAge   = 15 * 60       // 15 minutes
 	sessionCookieMaxAge = 3 * 24 * 3600 // 3 days, matches auth_service.sessionLifetime
 )
 
@@ -83,7 +84,9 @@ func (h *authHandlerImpl) Me(c *gin.Context) {
 	session := c.MustGet(auth_middleware.CurrentUserKey).(auth_dto.Session)
 	c.JSON(http.StatusOK, gin.H{
 		"email":   session.Email,
-		"isAdmin": session.Email == h.adminEmail,
+		"isAdmin": session.Email == h.adminEmail || admin_roster_holder.IsAdmin(session.Email),
+		// The owner may promote admins and cannot be changed by them.
+		"isOwner": session.Email == h.adminEmail || admin_roster_holder.IsOwner(session.Email),
 	})
 }
 

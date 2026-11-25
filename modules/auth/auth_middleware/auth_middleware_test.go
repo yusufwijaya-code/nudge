@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"nudge/config"
+	"nudge/modules/admin_roster/admin_roster_holder"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/registration/registration_dto"
 )
@@ -148,5 +149,30 @@ func TestAuthMiddlewareAPI_AllowsValidSession(t *testing.T) {
 	}
 	if got.(auth_dto.Session).Email != "dev@esb.co.id" {
 		t.Errorf("CurrentUserKey email = %q, want dev@esb.co.id", got.(auth_dto.Session).Email)
+	}
+}
+
+// A user the owner promoted may use the admin panel; everyone else may not.
+func TestAdminMiddleware_AllowsAPromotedAdminAndStopsBeingOneWhenDemoted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Cleanup(func() { admin_roster_holder.SetAdmins(nil) })
+	run := func(email string) bool {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Set(CurrentUserKey, auth_dto.Session{Email: email})
+		AdminMiddleware(testCfg())(c)
+		return !c.IsAborted()
+	}
+
+	if run("keva.galih@esb.co.id") {
+		t.Fatal("a user who was not promoted must be refused")
+	}
+	admin_roster_holder.SetAdmins([]string{"keva.galih@esb.co.id"})
+	if !run("keva.galih@esb.co.id") {
+		t.Error("a promoted user must pass")
+	}
+	admin_roster_holder.SetAdmins(nil)
+	if run("keva.galih@esb.co.id") {
+		t.Error("a demoted user must be refused again")
 	}
 }

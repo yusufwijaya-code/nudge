@@ -24,6 +24,13 @@
   @if (!loading() && !notFound() && !error() && user(); as u) {
     <a class="back-link" routerLink="/admin/users"><app-icon name="arrow-left" [size]="14" /> Daftar user</a>
 
+    @if (u.isOwner && !viewerIsOwner) {
+      <div class="admin-editing-banner owner-lock" data-owner-lock>
+        <app-icon name="lock" [size]="18" />
+        <span>Ini akun pemilik. Kamu bisa melihatnya, tetapi hanya pemilik yang bisa mengubahnya.</span>
+      </div>
+    }
+
     <div class="admin-editing-banner">
       <app-icon name="shield" [size]="18" />
       <span>Kamu sedang mengatur pengaturan milik <strong>{{ u.email }}</strong>. Setiap perubahan diberitahukan ke user lewat DM.</span>
@@ -51,7 +58,7 @@
               class="btn btn-sm"
               [class.btn-soft]="!u.flagActive"
               [class.btn-ghost]="u.flagActive"
-              [disabled]="busy()"
+              [disabled]="busy() || (u.isOwner && !viewerIsOwner)"
               (click)="toggleActive()"
             >
               <app-icon name="power" [size]="14" /> {{ u.flagActive ? 'Nonaktifkan' : 'Aktifkan' }}
@@ -62,13 +69,13 @@
           <dt>Jira Account ID</dt>
           <dd>
             <div class="inline-edit">
-              <input type="text" [(ngModel)]="jiraAccountIdDraft" [disabled]="busy()" placeholder="Belum diisi" aria-label="Jira Account ID" />
+              <input type="text" [(ngModel)]="jiraAccountIdDraft" [disabled]="busy() || (u.isOwner && !viewerIsOwner)" placeholder="Belum diisi" aria-label="Jira Account ID" />
               <button
                 type="button"
                 class="icon-btn"
                 title="Simpan ID"
                 aria-label="Simpan ID"
-                [disabled]="busy() || jiraAccountIdDraft === u.jiraAccountId"
+                [disabled]="busy() || (u.isOwner && !viewerIsOwner) || jiraAccountIdDraft === u.jiraAccountId"
                 (click)="saveJiraAccountId()"
               >
                 <app-icon name="check" [size]="16" />
@@ -123,7 +130,10 @@
       </div>
     </section>
 
-    <app-chat-sender-card [userId]="u.userId" />
-    <app-settings />
+    <!-- The owner's settings are read-only for other admins (the server refuses the change anyway). -->
+    <div class="owner-readonly" [class.locked]="u.isOwner && !viewerIsOwner" [attr.inert]="u.isOwner && !viewerIsOwner ? '' : null" data-owner-settings>
+      <app-chat-sender-card [userId]="u.userId" />
+      <app-settings />
+    </div>
   }
 </div>

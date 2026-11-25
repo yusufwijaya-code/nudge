@@ -18,6 +18,8 @@ import (
 	"nudge/migrations"
 	"nudge/modules/admin_dashboard/admin_dashboard_handler"
 	"nudge/modules/admin_dashboard/admin_dashboard_service"
+	"nudge/modules/admin_roster"
+	"nudge/modules/admin_roster/admin_roster_holder"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_handler"
 	"nudge/modules/auth/auth_service"
@@ -463,7 +465,23 @@ func main() {
 
 	userAvatarHandler := user_avatar_handler.NewUserAvatarHandler(userAvatarSvc)
 
-	router := SetupRouter(&cfg, authSvc, authHandler, userDashboardHandler, adminDashboardHandler, sprintReportHandler, adminUserSettings, userAvatarHandler, user_leave_handler.NewUserLeaveHandler(userLeaveSvc))
+	// Admin roster: the owner (ADMIN_EMAIL) is always an admin and can promote
+	// others; nobody else can change the owner's account (guard on :userID routes).
+	admin_roster_holder.SetOwner(cfg.AdminEmail)
+	adminRosterRepo := admin_roster.NewRepository(db)
+	adminRosterSvc := admin_roster.NewService(adminRosterRepo)
+	if err := adminRosterSvc.Load(context.Background()); err != nil {
+		log.Fatalf("failed to load the admin roster: %v", err)
+	}
+	shutdownMgr.AddWorker()
+	go func() {
+		defer shutdownMgr.WorkerDone()
+		adminRosterSvc.Run(shutdownMgr.Context())
+	}()
+
+	router := SetupRouter(&cfg, authSvc, authHandler, userDashboardHandler, adminDashboardHandler, sprintReportHandler, adminUserSettings, userAvatarHandler, user_leave_handler.NewUserLeaveHandler(userLeaveSvc),
+		admin_roster.ProtectOwner(adminRosterRepo.FindEmail))
+	MountAdminRoster(router, &cfg, authSvc, admin_roster.NewHandler(adminRosterSvc))
 
 	chatAppRoutes := ChatAppRoutes{}
 	if chatAppClient != nil && cfg.GoogleChatAppProjectNumber != "" {

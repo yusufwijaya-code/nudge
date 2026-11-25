@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 
+	"nudge/modules/admin_roster/admin_roster_holder"
 	"nudge/modules/admin_dashboard/admin_dashboard_dto"
 	"nudge/modules/chat_app/chat_app_dto"
 	"nudge/modules/chat_delivery"
@@ -83,6 +84,8 @@ func (s *adminDashboardServiceImpl) ListUsers(ctx context.Context) ([]admin_dash
 		row.ChatAppActivated = st.Activated()
 		row.ChatAppActivatedDate = st.ActivatedDate
 		row.ChatSender = st.Sender
+		row.IsOwner = admin_roster_holder.IsOwner(u.Email)
+		row.IsAdmin = admin_roster_holder.IsAdmin(u.Email)
 		row.EffectiveChatSender = chat_delivery.EffectiveSender(st, chat_delivery.IsOperator(u.Email, s.selfEmail), s.chatAppEnabled)
 		rows = append(rows, row)
 	}
