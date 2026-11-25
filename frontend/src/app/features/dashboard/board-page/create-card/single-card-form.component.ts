@@ -1,6 +1,6 @@
-import { Component, computed, inject, input, output, signal, viewChildren } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, untracked, viewChildren } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CreateMeta, CreateType, IssueCreateService } from '../../../../core/services/issue-create.service';
+import { CreateMeta, CreateSprint, CreateType, IssueCreateService } from '../../../../core/services/issue-create.service';
 import { JiraFieldInputComponent, fieldFilled } from '../../../../shared/ui/jira-field-input.component';
 import { SelectComponent, SelectOption } from '../../../../shared/ui/select.component';
 import { IconComponent } from '../../../../shared/ui/icon.component';
@@ -39,8 +39,41 @@ export class SingleCardFormComponent {
   protected saving = signal(false);
   protected errors = signal<Record<string, string>>({});
   protected formError = signal<string | null>(null);
-  protected lastCreated = signal<{ key: string; url: string } | null>(null);
+  protected lastCreated = signal<{ key: string; url: string; sprintWarning?: string } | null>(null);
+  /** The board's active + future sprints; the card goes into the picked one ('' = backlog). */
+  protected sprints = signal<CreateSprint[]>([]);
+  protected sprintId = signal('');
+  private sprintTouched = false;
   private fieldInputs = viewChildren(JiraFieldInputComponent);
+
+  constructor() {
+    // Each board has its own sprints: reload when the board changes. The active
+    // sprint is preselected (a card made from the board belongs to the sprint
+    // being worked on), unless the user already chose.
+    effect(() => {
+      const board = this.boardId();
+      untracked(() => {
+        this.sprints.set([]);
+        this.sprintId.set('');
+        this.sprintTouched = false;
+        this.api.sprints(board).subscribe({
+          next: (res) => {
+            if (board !== this.boardId()) return;
+            this.sprints.set(res.sprints ?? []);
+            const active = (res.sprints ?? []).find((s) => s.state === 'active');
+            if (active && !this.sprintTouched) this.sprintId.set(String(active.id));
+          },
+          error: () => this.sprints.set([]),
+        });
+      });
+    });
+  }
+
+  protected sprintOptions = computed<SelectOption<string>[]>(() => [
+    { value: '', label: 'Backlog (tanpa sprint)' },
+    ...this.sprints().map((s) => ({ value: String(s.id), label: `${s.name}${s.state === 'active' ? ' (aktif)' : ' (akan datang)'}` })),
+  ]);
+  protected setSprint(id: string): void { this.sprintTouched = true; this.sprintId.set(id); }
 
   protected mainFields = computed(() => (this.type()?.fields ?? []).filter((f) => f.kind === 'textarea'));
   protected sideFields = computed(() => (this.type()?.fields ?? []).filter((f) => f.kind !== 'textarea'));
@@ -98,6 +131,8 @@ export class SingleCardFormComponent {
       boardId: this.boardId(), typeId: t.id, summary: this.summary().trim(), description: this.description(),
       storyPoints: t.storyPointField ? this.sp() : null, assigneeAccountId: this.assignee(),
       parentKey: (t.subtask || t.parentAllowed) ? this.parentKey().trim() || null : null, fields: this.values(),
+      // A subtask follows its parent's sprint.
+      sprintId: !t.subtask && this.sprintId() ? Number(this.sprintId()) : null,
     }).subscribe({
       next: (res) => { this.saving.set(false); this.lastCreated.set(res); this.created.emit(res.key); },
       error: (err) => {

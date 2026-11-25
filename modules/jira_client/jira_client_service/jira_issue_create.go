@@ -25,6 +25,10 @@ type IssueCreateClient interface {
 	IssueBriefAs(ctx context.Context, cred *jira_client_dto.Credential, issueKey string) (jira_client_dto.IssueBrief, error)
 	SearchBriefsAs(ctx context.Context, cred *jira_client_dto.Credential, jql string, maxResults int) ([]jira_client_dto.IssueBrief, error)
 	MyselfAs(ctx context.Context, cred *jira_client_dto.Credential) (string, error)
+	// BoardSprintsAs lists a board's active and future sprints (a Kanban board has none).
+	BoardSprintsAs(ctx context.Context, cred *jira_client_dto.Credential, boardID int64) ([]jira_client_dto.SprintRef, error)
+	// MoveToSprintAs puts issues into a sprint through the Agile API, which works for every issue type.
+	MoveToSprintAs(ctx context.Context, cred *jira_client_dto.Credential, sprintID int64, issueKeys []string) error
 }
 
 var ErrIssueNotFound = errors.New("jira_client: issue not found")
@@ -121,4 +125,34 @@ func (c *issueCreateClient) MyselfAs(ctx context.Context, cred *jira_client_dto.
 		return "", fmt.Errorf("jira_client: MyselfAs failed: %w", err)
 	}
 	return res.AccountID, nil
+}
+
+// BoardSprintsAs pages through GET /board/{id}/sprint?state=active,future. A
+// board without sprints (Kanban) answers 400: that is an empty list, not a failure.
+func (c *issueCreateClient) BoardSprintsAs(ctx context.Context, cred *jira_client_dto.Credential, boardID int64) ([]jira_client_dto.SprintRef, error) {
+	var out []jira_client_dto.SprintRef
+	for start := 0; start < 200; start += 50 {
+		u := c.url(fmt.Sprintf("/rest/agile/1.0/board/%d/sprint?state=active,future&startAt=%d&maxResults=50", boardID, start))
+		page, err := curl_helper.CurlRequest[jira_client_dto.SprintPage](ctx, u, c.base.authHeadersFor(cred), nil, http.MethodGet, 10000, true)
+		if err != nil {
+			var httpErr *curl_helper.HTTPError
+			if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusBadRequest {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("jira_client: BoardSprintsAs(%d) failed: %w", boardID, err)
+		}
+		out = append(out, page.Values...)
+		if len(page.Values) < 50 {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (c *issueCreateClient) MoveToSprintAs(ctx context.Context, cred *jira_client_dto.Credential, sprintID int64, issueKeys []string) error {
+	body := map[string]any{"issues": issueKeys}
+	if _, err := curl_helper.CurlRequest[map[string]any](ctx, c.url(fmt.Sprintf("/rest/agile/1.0/sprint/%d/issue", sprintID)), c.base.authHeadersFor(cred), body, http.MethodPost, 15000, true); err != nil {
+		return fmt.Errorf("jira_client: MoveToSprintAs(%d) failed: %w", sprintID, err)
+	}
+	return nil
 }

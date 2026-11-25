@@ -2,6 +2,7 @@ package issue_create_handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,6 +24,9 @@ func (f fakeSvc) Meta(context.Context, string, int64) (svc.Meta, error) {
 	return svc.Meta{ProjectKey: "CORE"}, f.err
 }
 func (f fakeSvc) Users(context.Context, string, int64, string) ([]svc.User, error) { return nil, f.err }
+func (f fakeSvc) Sprints(context.Context, string, int64) ([]svc.Sprint, error) {
+	return []svc.Sprint{{ID: 6, Name: "Sprint 7", State: "active"}}, f.err
+}
 func (f fakeSvc) Parent(context.Context, string, int64, string) (svc.Parent, error) {
 	return svc.Parent{}, f.err
 }
@@ -95,5 +99,16 @@ func TestParentsListsCandidates(t *testing.T) {
 	}
 	if w := serve(fakeSvc{}, http.MethodGet, "/api/dashboard/create/parents", ""); w.Code != http.StatusBadRequest {
 		t.Fatalf("missing boardId → %d", w.Code)
+	}
+}
+
+func TestSprintsEndpointAndMoveWarning(t *testing.T) {
+	w := serve(fakeSvc{}, http.MethodGet, "/api/dashboard/create/sprints?boardId=26", "")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"name":"Sprint 7"`) {
+		t.Fatalf("sprints → %d %s", w.Code, w.Body.String())
+	}
+	w = serve(fakeSvc{err: &svc.SprintMoveError{Key: "CORE-1", Err: errors.New("x")}}, http.MethodPost, "/api/dashboard/create/issue", `{"boardId":26,"typeId":"1","summary":"x","sprintId":6}`)
+	if w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), `"key":"CORE-1"`) || !strings.Contains(w.Body.String(), "sprintWarning") {
+		t.Fatalf("move failure → %d %s, want 201 with key and sprintWarning", w.Code, w.Body.String())
 	}
 }
