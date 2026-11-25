@@ -9,6 +9,33 @@ export interface FieldRef {
   name: string;
 }
 
+/** A Daily Stand Up: weekday 1 = Monday … 5 = Friday, start "HH:MM" (WIB), length in minutes. */
+export interface DsuSlot {
+  weekday: number;
+  start: string;
+  minutes: number;
+}
+
+export type RitualFrequency = 'weekly' | 'sprint_week';
+
+/** A named recurring slot: every week, or only in the Nth calendar week of the sprint. */
+export interface Ritual {
+  name: string;
+  enabled: boolean;
+  weekday: number;
+  start: string;
+  minutes: number;
+  frequency: RitualFrequency;
+  /** Only with frequency 'sprint_week'; 0 otherwise. */
+  sprintWeek: number;
+}
+
+/** Hours that do not count toward a ticket's time on this board. */
+export interface ExcludedSchedule {
+  dsu: DsuSlot[];
+  rituals: Ritual[];
+}
+
 /** One board rule (Tech Spec "Aturan Board (Admin CRUD)"). */
 export interface TrackingRule {
   projectKey: string;
@@ -22,6 +49,10 @@ export interface TrackingRule {
   storyPointWriteFieldSubtask: string;
   /** Issue type id → optional Jira fields shown on Buat Card ({} = only required fields). */
   createFields?: Record<string, string[]>;
+  /** DSU and rituals whose hours are not counted. */
+  excluded?: ExcludedSchedule;
+  /** Saving started a recalculation of every sprint from Jira in the background. */
+  recalculating?: boolean;
   isActive: boolean;
   editedBy: string;
   editedDate: string;
@@ -39,6 +70,7 @@ export interface TrackingRuleInput {
   storyPointWriteField: string;
   storyPointWriteFieldSubtask: string;
   createFields: Record<string, string[]>;
+  excluded: ExcludedSchedule;
 }
 
 /** Buat Card control kinds (same as the create form). */
@@ -82,7 +114,8 @@ export type TrackingRuleField =
   | 'storyPointFields'
   | 'storyPointWriteField'
   | 'storyPointWriteFieldSubtask'
-  | 'createFields';
+  | 'createFields'
+  | 'excluded';
 
 export interface TrackingRuleError {
   error: string;

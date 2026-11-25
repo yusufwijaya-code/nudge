@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"nudge/modules/board/board_dto"
+	"nudge/modules/business_hours/business_hours_dto"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/jira_client/jira_client_service"
 )
@@ -35,6 +36,9 @@ type Store interface {
 // Recalculator is sprint_backfill_service's "every user" run.
 type Recalculator interface {
 	RunAll(ctx context.Context) int
+	// RecalculateProject rewrites the time of every session of the project, in
+	// every sprint, from Jira's changelog (after its excluded slots changed).
+	RecalculateProject(ctx context.Context, projectKey string) int
 }
 
 // BoardLookup is the cached ms_board read of board_service.
@@ -49,7 +53,13 @@ type Deps struct {
 	Recalc Recalculator
 	// Apply installs the active rules; defaults to jira_client_dto.SetRules.
 	Apply func([]jira_client_dto.TrackingRule)
-	Now   func() time.Time
+	// ApplySchedules installs the excluded slots of the active rules; defaults
+	// to business_hours_dto.SetSchedules.
+	ApplySchedules func(map[string]business_hours_dto.Schedule)
+	// SprintStart is when the project's active sprint began, for the "week N of
+	// the sprint" rituals; nil or false = unknown (those rituals are then off).
+	SprintStart func(ctx context.Context, projectKey string) (time.Time, bool)
+	Now         func() time.Time
 	// Lifetime is cancelled on shutdown; background work (Recalculate)
 	// derives from it. Defaults to context.Background().
 	Lifetime context.Context
@@ -86,11 +96,16 @@ type Service struct {
 	boardStatuses map[string]cachedStatuses
 	createFields  map[string]cachedCreateFields
 	recalcRunning atomic.Bool
+	// projectRecalcMu runs the per-project recalculations one after another.
+	projectRecalcMu sync.Mutex
 }
 
 func NewService(d Deps) *Service {
 	if d.Apply == nil {
 		d.Apply = jira_client_dto.SetRules
+	}
+	if d.ApplySchedules == nil {
+		d.ApplySchedules = business_hours_dto.SetSchedules
 	}
 	if d.Now == nil {
 		d.Now = time.Now
@@ -111,15 +126,27 @@ func (s *Service) Reload(ctx context.Context) error {
 		return fmt.Errorf("tracking_rule: reload: %w", err)
 	}
 	active := make([]jira_client_dto.TrackingRule, 0, len(rules))
+	schedules := map[string]business_hours_dto.Schedule{}
 	for _, r := range rules {
-		if r.IsActive {
-			active = append(active, r.Tracking())
+		if !r.IsActive {
+			continue
+		}
+		active = append(active, r.Tracking())
+		if windows := r.Excluded.Windows(); len(windows) > 0 {
+			sched := business_hours_dto.Schedule{Windows: windows}
+			if r.Excluded.NeedsSprintStart() && s.d.SprintStart != nil {
+				if start, ok := s.d.SprintStart(ctx, r.ProjectKey); ok {
+					sched.SprintStart = start
+				}
+			}
+			schedules[r.ProjectKey] = sched
 		}
 	}
 	if len(active) == 0 {
 		log.Printf("tracking_rule: WARN no active tracking rule — the poller searches nothing")
 	}
 	s.d.Apply(active)
+	s.d.ApplySchedules(schedules)
 	return nil
 }
 
@@ -243,7 +270,13 @@ func view(r Rule, names map[string]string) RuleView {
 		ProjectKey: r.ProjectKey, ProjectName: r.ProjectName, TrackedStatuses: r.TrackedStatuses, DoneStatus: r.DoneStatus,
 		StoryPointFields: make([]FieldRef, 0, len(r.StoryPointFields)), StoryPointWriteField: r.StoryPointWriteField,
 		StoryPointWriteFieldSubtask: r.StoryPointWriteFieldSubtask, IsActive: r.IsActive, EditedBy: r.EditedBy, EditedDate: r.EditedDate,
-		CreateFields: map[string][]string{},
+		CreateFields: map[string][]string{}, Excluded: ExcludedSchedule{DSU: []DSUSlot{}, Rituals: []Ritual{}},
+	}
+	if r.Excluded.DSU != nil {
+		v.Excluded.DSU = r.Excluded.DSU
+	}
+	if r.Excluded.Rituals != nil {
+		v.Excluded.Rituals = r.Excluded.Rituals
 	}
 	for typeID, ids := range r.CreateFields {
 		v.CreateFields[typeID] = ids
@@ -297,7 +330,7 @@ func (s *Service) Create(ctx context.Context, in RuleInput, editor string) (Rule
 	if err := s.d.Store.Insert(ctx, rule); err != nil {
 		return RuleView{}, err
 	}
-	return s.afterSave(ctx, key)
+	return s.afterSaveAndRecalculate(ctx, key)
 }
 
 func (s *Service) Update(ctx context.Context, projectKey string, in RuleInput, editor string) (RuleView, error) {
@@ -323,7 +356,7 @@ func (s *Service) Update(ctx context.Context, projectKey string, in RuleInput, e
 	if err := s.d.Store.Update(ctx, rule); err != nil {
 		return RuleView{}, err
 	}
-	return s.afterSave(ctx, key)
+	return s.afterSaveAndRecalculate(ctx, key)
 }
 
 // SetActive switches a rule on/off ("hapus" = nonaktifkan). The last active
@@ -360,6 +393,33 @@ func (s *Service) afterSave(ctx context.Context, key string) (RuleView, error) {
 		return RuleView{}, ErrRuleNotFound
 	}
 	return view(saved, s.fieldNames(ctx)), nil
+}
+
+// afterSaveAndRecalculate is afterSave plus, in the background, a recalculation
+// from Jira of every sprint of the project: the saved tracked statuses or
+// excluded slots change what the time of its tickets is.
+func (s *Service) afterSaveAndRecalculate(ctx context.Context, key string) (RuleView, error) {
+	v, err := s.afterSave(ctx, key)
+	if err != nil {
+		return v, err
+	}
+	v.Recalculating = s.recalculateProject(key)
+	return v, nil
+}
+
+// recalculateProject starts the recalculation and reports whether it did;
+// runs for different saves queue up one behind the other.
+func (s *Service) recalculateProject(key string) bool {
+	if s.d.Recalc == nil {
+		return false
+	}
+	go func() {
+		s.projectRecalcMu.Lock()
+		defer s.projectRecalcMu.Unlock()
+		n := s.d.Recalc.RecalculateProject(s.d.Lifetime, key)
+		log.Printf("tracking_rule: recalculated %d session(s) of %s from Jira after the board was saved", n, key)
+	}()
+	return true
 }
 
 // CreateFields lists the project's issue types and the fields Buat Card can

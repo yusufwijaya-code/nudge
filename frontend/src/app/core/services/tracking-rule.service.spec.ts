@@ -12,6 +12,7 @@ describe('TrackingRuleService', () => {
       trackedStatuses: ['In Progress'], doneStatus: 'Done', reviewStatus: null,
       storyPointFields: ['customfield_1'], storyPointWriteField: 'customfield_1', storyPointWriteFieldSubtask: 'customfield_1',
       createFields: { '10206': ['duedate'] },
+      excluded: { dsu: [{ weekday: 2, start: '08:45', minutes: 30 }], rituals: [] },
     };
 
     svc.list().subscribe();
@@ -28,6 +29,7 @@ describe('TrackingRuleService', () => {
     const created = http.expectOne((r) => r.method === 'POST' && r.url.endsWith('/api/dashboard/admin/tracking-rules'));
     expect(created.request.body.projectKey).toBe('POS');
     expect(created.request.body.createFields).toEqual({ '10206': ['duedate'] });
+    expect(created.request.body.excluded.dsu).toEqual([{ weekday: 2, start: '08:45', minutes: 30 }]);
     created.flush({});
     svc.update('POS', input).subscribe();
     http.expectOne((r) => r.method === 'PUT' && r.url.endsWith('/api/dashboard/admin/tracking-rules/POS')).flush({});

@@ -15,7 +15,7 @@ const mysqlDuplicateKeyErrNo = 1062
 // The last column is a board of the project with a cached avatar (ms_board),
 // so the admin page can show the project picture through the board avatar proxy.
 const ruleColumns = `projectKey, projectName, trackedStatuses, doneStatus, reviewStatus, storyPointFields,
-	storyPointWriteField, storyPointWriteFieldSubtask, createFields, isActive, editedBy, editedDate,
+	storyPointWriteField, storyPointWriteFieldSubtask, createFields, excludedSchedule, isActive, editedBy, editedDate,
 	(SELECT MIN(b.boardID) FROM ms_board b WHERE b.projectKey = ms_tracking_rule.projectKey AND b.avatarURL <> '')`
 
 // Repository reads and writes ms_tracking_rule.
@@ -27,11 +27,11 @@ type rowScanner interface{ Scan(dest ...any) error }
 
 func scanRule(row rowScanner) (Rule, error) {
 	var r Rule
-	var tracked, fields, createFields []byte
+	var tracked, fields, createFields, excluded []byte
 	var review sql.NullString
 	var avatarBoard sql.NullInt64
 	if err := row.Scan(&r.ProjectKey, &r.ProjectName, &tracked, &r.DoneStatus, &review, &fields,
-		&r.StoryPointWriteField, &r.StoryPointWriteFieldSubtask, &createFields, &r.IsActive, &r.EditedBy, &r.EditedDate, &avatarBoard); err != nil {
+		&r.StoryPointWriteField, &r.StoryPointWriteFieldSubtask, &createFields, &excluded, &r.IsActive, &r.EditedBy, &r.EditedDate, &avatarBoard); err != nil {
 		return Rule{}, err
 	}
 	r.AvatarBoardID = avatarBoard.Int64
@@ -47,6 +47,11 @@ func scanRule(row rowScanner) (Rule, error) {
 		}
 		if len(r.CreateFields) == 0 {
 			r.CreateFields = nil
+		}
+	}
+	if len(excluded) > 0 {
+		if err := json.Unmarshal(excluded, &r.Excluded); err != nil {
+			return Rule{}, fmt.Errorf("tracking_rule: excludedSchedule of %s: %w", r.ProjectKey, err)
 		}
 	}
 	r.ReviewStatus = review.String
@@ -100,6 +105,15 @@ func createFieldsArg(m map[string][]string) (any, error) {
 	return string(b), err
 }
 
+// excludedArg is the excludedSchedule JSON column value (NULL when nothing is excluded).
+func excludedArg(e ExcludedSchedule) (any, error) {
+	if e.IsZero() {
+		return nil, nil
+	}
+	b, err := json.Marshal(e)
+	return string(b), err
+}
+
 func nullIfEmpty(s string) any {
 	if s == "" {
 		return nil
@@ -120,11 +134,15 @@ func (r *Repository) Insert(ctx context.Context, rule Rule) error {
 	if err != nil {
 		return err
 	}
+	excluded, err := excludedArg(rule.Excluded)
+	if err != nil {
+		return err
+	}
 	_, err = r.db.ExecContext(ctx, `INSERT INTO ms_tracking_rule
-		(projectKey, projectName, trackedStatuses, doneStatus, reviewStatus, storyPointFields, storyPointWriteField, storyPointWriteFieldSubtask, createFields, isActive, editedBy)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(projectKey, projectName, trackedStatuses, doneStatus, reviewStatus, storyPointFields, storyPointWriteField, storyPointWriteFieldSubtask, createFields, excludedSchedule, isActive, editedBy)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		rule.ProjectKey, rule.ProjectName, tracked, rule.DoneStatus, nullIfEmpty(rule.ReviewStatus), fields,
-		rule.StoryPointWriteField, rule.StoryPointWriteFieldSubtask, createFields, rule.IsActive, rule.EditedBy)
+		rule.StoryPointWriteField, rule.StoryPointWriteFieldSubtask, createFields, excluded, rule.IsActive, rule.EditedBy)
 	var mysqlErr *mysql.MySQLError
 	if errors.As(err, &mysqlErr) && mysqlErr.Number == mysqlDuplicateKeyErrNo {
 		return ErrRuleExists
@@ -147,11 +165,15 @@ func (r *Repository) Update(ctx context.Context, rule Rule) error {
 	if err != nil {
 		return err
 	}
+	excluded, err := excludedArg(rule.Excluded)
+	if err != nil {
+		return err
+	}
 	_, err = r.db.ExecContext(ctx, `UPDATE ms_tracking_rule SET projectName = ?, trackedStatuses = ?, doneStatus = ?, reviewStatus = ?,
-		storyPointFields = ?, storyPointWriteField = ?, storyPointWriteFieldSubtask = ?, createFields = ?, editedBy = ?, editedDate = CURRENT_TIMESTAMP
+		storyPointFields = ?, storyPointWriteField = ?, storyPointWriteFieldSubtask = ?, createFields = ?, excludedSchedule = ?, editedBy = ?, editedDate = CURRENT_TIMESTAMP
 		WHERE projectKey = ?`,
 		rule.ProjectName, tracked, rule.DoneStatus, nullIfEmpty(rule.ReviewStatus), fields,
-		rule.StoryPointWriteField, rule.StoryPointWriteFieldSubtask, createFields, rule.EditedBy, rule.ProjectKey)
+		rule.StoryPointWriteField, rule.StoryPointWriteFieldSubtask, createFields, excluded, rule.EditedBy, rule.ProjectKey)
 	return err
 }
 

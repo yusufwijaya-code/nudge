@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type Issue struct {
@@ -267,4 +268,19 @@ type TransitionID struct {
 type Credential struct {
 	Email    string
 	APIToken string
+}
+
+// StartTime is the sprint's start date; ok is false when Jira gave none or it
+// is not a date ("2026-11-04T02:00:00.000Z", or with an offset).
+func (s SprintRef) StartTime() (time.Time, bool) {
+	raw := strings.TrimSpace(s.StartDate)
+	if raw == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.000-0700", "2006-01-02T15:04:05.000Z0700"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }

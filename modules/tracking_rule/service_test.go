@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"nudge/modules/board/board_dto"
+	"nudge/modules/business_hours/business_hours_dto"
 	"nudge/modules/jira_client/jira_client_dto"
 	"nudge/modules/jira_client/jira_client_service"
 )
@@ -169,6 +170,10 @@ type fakeRecalc struct {
 	started, release chan struct{}
 	// stopped receives the run's ctx error when it ends.
 	stopped chan error
+	// projects / projectDone: the RecalculateProject calls.
+	mu          sync.Mutex
+	projects    []string
+	projectDone chan string
 }
 
 func (f *fakeRecalc) RunAll(ctx context.Context) int {
@@ -183,6 +188,17 @@ func (f *fakeRecalc) RunAll(ctx context.Context) int {
 	}
 	if f.stopped != nil {
 		f.stopped <- ctx.Err()
+	}
+	return 0
+}
+
+// RecalculateProject records the projects it was asked to recalculate.
+func (f *fakeRecalc) RecalculateProject(_ context.Context, key string) int {
+	f.mu.Lock()
+	f.projects = append(f.projects, key)
+	f.mu.Unlock()
+	if f.projectDone != nil {
+		f.projectDone <- key
 	}
 	return 0
 }
@@ -208,20 +224,22 @@ func seedRules() []Rule {
 }
 
 type harness struct {
-	svc     *Service
-	store   *fakeStore
-	jira    *fakeJira
-	applied [][]jira_client_dto.TrackingRule
-	now     time.Time
+	schedules map[string]business_hours_dto.Schedule
+	svc       *Service
+	store     *fakeStore
+	jira      *fakeJira
+	applied   [][]jira_client_dto.TrackingRule
+	now       time.Time
 }
 
 func newHarness(rules ...Rule) *harness {
 	h := &harness{store: newFakeStore(rules...), jira: newFakeJira(), now: time.Date(2026, 11, 17, 9, 0, 0, 0, time.UTC)}
 	h.svc = NewService(Deps{
 		Store: h.store, Jira: h.jira, Recalc: &fakeRecalc{},
-		Boards: fakeBoards{26: {BoardID: 26, ProjectKey: "CORE"}, 99: {BoardID: 99}},
-		Apply:  func(r []jira_client_dto.TrackingRule) { h.applied = append(h.applied, r) },
-		Now:    func() time.Time { return h.now },
+		Boards:         fakeBoards{26: {BoardID: 26, ProjectKey: "CORE"}, 99: {BoardID: 99}},
+		Apply:          func(r []jira_client_dto.TrackingRule) { h.applied = append(h.applied, r) },
+		ApplySchedules: func(m map[string]business_hours_dto.Schedule) { h.schedules = m },
+		Now:            func() time.Time { return h.now },
 	})
 	return h
 }
@@ -542,5 +560,184 @@ func TestBoardStatuses_CachedPerProjectForAnHour(t *testing.T) {
 		if _, err := h.svc.BoardStatuses(ctx, id); !errors.Is(err, ErrBoardNotFound) {
 			t.Errorf("board %d err = %v", id, err)
 		}
+	}
+}
+
+func schedule() *ExcludedSchedule {
+	return &ExcludedSchedule{
+		DSU: []DSUSlot{{Weekday: 2, Start: "08:45", Minutes: 30}, {Weekday: 3, Start: "08:45", Minutes: 30}},
+		Rituals: []Ritual{
+			{Name: "Sprint Planning / Grooming", Enabled: true, Weekday: 1, Start: "11:00", Minutes: 390, Frequency: FrequencySprintWeek, SprintWeek: 2},
+			{Name: "Retro", Enabled: false, Weekday: 5, Start: "15:00", Minutes: 60, Frequency: FrequencyWeekly},
+		},
+	}
+}
+
+func TestReload_InstallsTheExcludedSlotsOfActiveRulesWithTheSprintStart(t *testing.T) {
+	core := seedRules()[0]
+	core.Excluded = *schedule()
+	oms := seedRules()[1]
+	oms.Excluded = ExcludedSchedule{DSU: []DSUSlot{{Weekday: 1, Start: "09:00", Minutes: 15}}}
+	off := Rule{ProjectKey: "OFF", ProjectName: "x", TrackedStatuses: []string{"A"}, DoneStatus: "B", IsActive: false, Excluded: *schedule()}
+	h := newHarness(core, oms, off)
+	start := time.Date(2026, 11, 4, 9, 0, 0, 0, time.FixedZone("WIB", 7*3600))
+	var asked []string
+	h.svc.d.SprintStart = func(_ context.Context, key string) (time.Time, bool) { asked = append(asked, key); return start, true }
+
+	if err := h.svc.Reload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	c, ok := h.schedules["CORE"]
+	if !ok || len(c.Windows) != 3 { // two DSU + the enabled ritual; the disabled Retro is left out
+		t.Fatalf("CORE schedule = %+v", c)
+	}
+	if !c.SprintStart.Equal(start) {
+		t.Errorf("CORE sprint start = %v, want %v", c.SprintStart, start)
+	}
+	var ritual business_hours_dto.ExcludedWindow
+	for _, w := range c.Windows {
+		if w.Name == "Sprint Planning / Grooming" {
+			ritual = w
+		}
+	}
+	if ritual.Weekday != time.Monday || ritual.StartMinute != 660 || ritual.Minutes != 390 || ritual.SprintWeek != 2 {
+		t.Errorf("ritual window = %+v", ritual)
+	}
+	if o := h.schedules["OMS"]; len(o.Windows) != 1 || !o.SprintStart.IsZero() {
+		t.Errorf("OMS has only an every-week DSU and needs no sprint start: %+v", o)
+	}
+	if _, found := h.schedules["OFF"]; found {
+		t.Error("an inactive rule must not be installed")
+	}
+	if !reflect.DeepEqual(asked, []string{"CORE"}) {
+		t.Errorf("sprint start asked for %v, want only CORE (the one with a week-N ritual)", asked)
+	}
+}
+
+func TestReload_WithoutASprintStartTheWeekNRitualStaysOff(t *testing.T) {
+	core := seedRules()[0]
+	core.Excluded = *schedule()
+	h := newHarness(core)
+	h.svc.d.SprintStart = func(context.Context, string) (time.Time, bool) { return time.Time{}, false }
+	if err := h.svc.Reload(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !h.schedules["CORE"].SprintStart.IsZero() {
+		t.Error("an unknown sprint start must stay zero, so the week-N ritual is not applied")
+	}
+}
+
+func TestCreateAndUpdate_StoreTheScheduleAndRecalculateEverySprintInTheBackground(t *testing.T) {
+	h := newHarness(seedRules()...)
+	recalc := &fakeRecalc{projectDone: make(chan string, 4)}
+	h.svc.d.Recalc = recalc
+
+	in := validPOS()
+	in.Excluded = schedule()
+	created, err := h.svc.Create(ctx, in, "admin@esb.co.id")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if !created.Recalculating {
+		t.Error("saving must report that a recalculation started")
+	}
+	if len(created.Excluded.DSU) != 2 || len(created.Excluded.Rituals) != 2 {
+		t.Errorf("stored schedule = %+v", created.Excluded)
+	}
+	if got := <-recalc.projectDone; got != "POS" {
+		t.Errorf("recalculated %q after Create, want POS", got)
+	}
+
+	in.Excluded = &ExcludedSchedule{}
+	updated, err := h.svc.Update(ctx, "POS", in, "admin@esb.co.id")
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if updated.Excluded.DSU == nil || updated.Excluded.Rituals == nil || len(updated.Excluded.DSU) != 0 {
+		t.Errorf("a cleared schedule must come back as empty lists, not null: %+v", updated.Excluded)
+	}
+	if got := <-recalc.projectDone; got != "POS" {
+		t.Errorf("recalculated %q after Update, want POS", got)
+	}
+}
+
+// Switching a rule on or off is not a change of what counts: no recalculation.
+func TestSetActive_DoesNotRecalculate(t *testing.T) {
+	h := newHarness(seedRules()...)
+	recalc := &fakeRecalc{projectDone: make(chan string, 1)}
+	h.svc.d.Recalc = recalc
+	if _, err := h.svc.SetActive(ctx, "OMS", false, "admin@esb.co.id"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	recalc.mu.Lock()
+	defer recalc.mu.Unlock()
+	if len(recalc.projects) != 0 {
+		t.Errorf("recalculated %v after SetActive, want none", recalc.projects)
+	}
+}
+
+func TestNormalizeExcluded_AcceptsTheFormAndRefusesEverythingElse(t *testing.T) {
+	good, msg := normalizeExcluded(schedule())
+	if msg != "" || len(good.DSU) != 2 || len(good.Rituals) != 2 || good.Rituals[0].SprintWeek != 2 || good.Rituals[1].SprintWeek != 0 {
+		t.Fatalf("good = %+v, %q", good, msg)
+	}
+	if empty, msg := normalizeExcluded(nil); msg != "" || empty.DSU == nil || empty.Rituals == nil || !empty.IsZero() {
+		t.Errorf("nil must give empty lists: %+v, %q", empty, msg)
+	}
+
+	bad := map[string]*ExcludedSchedule{
+		"DSU on Saturday":       {DSU: []DSUSlot{{Weekday: 6, Start: "08:45", Minutes: 30}}},
+		"two DSU the same day":  {DSU: []DSUSlot{{Weekday: 2, Start: "08:45", Minutes: 30}, {Weekday: 2, Start: "09:00", Minutes: 15}}},
+		"DSU time not HH:MM":    {DSU: []DSUSlot{{Weekday: 2, Start: "8:45", Minutes: 30}}},
+		"DSU hour 25":           {DSU: []DSUSlot{{Weekday: 2, Start: "25:00", Minutes: 30}}},
+		"DSU without minutes":   {DSU: []DSUSlot{{Weekday: 2, Start: "08:45", Minutes: 0}}},
+		"DSU longer than a day": {DSU: []DSUSlot{{Weekday: 2, Start: "08:45", Minutes: 600}}},
+		"ritual without name":   {Rituals: []Ritual{{Name: "  ", Weekday: 1, Start: "11:00", Minutes: 60, Frequency: FrequencyWeekly}}},
+		"ritual on Sunday":      {Rituals: []Ritual{{Name: "R", Weekday: 0, Start: "11:00", Minutes: 60, Frequency: FrequencyWeekly}}},
+		"unknown frequency":     {Rituals: []Ritual{{Name: "R", Weekday: 1, Start: "11:00", Minutes: 60, Frequency: "monthly"}}},
+		"sprint week 0":         {Rituals: []Ritual{{Name: "R", Weekday: 1, Start: "11:00", Minutes: 60, Frequency: FrequencySprintWeek, SprintWeek: 0}}},
+		"sprint week 9":         {Rituals: []Ritual{{Name: "R", Weekday: 1, Start: "11:00", Minutes: 60, Frequency: FrequencySprintWeek, SprintWeek: 9}}},
+		"too many rituals":      {Rituals: make([]Ritual, 11)},
+	}
+	for name, in := range bad {
+		if _, msg := normalizeExcluded(in); msg == "" {
+			t.Errorf("%s: accepted, want a message", name)
+		}
+	}
+}
+
+func TestCreate_AnInvalidScheduleIsRefusedBeforeAnythingIsStored(t *testing.T) {
+	h := newHarness(seedRules()...)
+	recalc := &fakeRecalc{projectDone: make(chan string, 1)}
+	h.svc.d.Recalc = recalc
+	in := validPOS()
+	in.Excluded = &ExcludedSchedule{DSU: []DSUSlot{{Weekday: 6, Start: "08:45", Minutes: 30}}}
+
+	var ve *ValidationError
+	if _, err := h.svc.Create(ctx, in, "admin@esb.co.id"); !errors.As(err, &ve) || ve.Fields["excluded"] == "" {
+		t.Fatalf("err = %v, want a validation error on excluded", err)
+	}
+	if _, found := h.store.rules["POS"]; found {
+		t.Error("nothing may be stored for an invalid schedule")
+	}
+	time.Sleep(50 * time.Millisecond)
+	recalc.mu.Lock()
+	defer recalc.mu.Unlock()
+	if len(recalc.projects) != 0 {
+		t.Errorf("recalculated %v for a refused save", recalc.projects)
+	}
+}
+
+func TestExcludedWindows_SkipDisabledRitualsAndBadRows(t *testing.T) {
+	e := ExcludedSchedule{
+		DSU:     []DSUSlot{{Weekday: 2, Start: "08:45", Minutes: 30}, {Weekday: 3, Start: "bad", Minutes: 30}},
+		Rituals: []Ritual{{Name: "A", Enabled: true, Weekday: 1, Start: "11:00", Minutes: 60, Frequency: FrequencyWeekly}, {Name: "B", Enabled: false, Weekday: 1, Start: "11:00", Minutes: 60, Frequency: FrequencyWeekly}},
+	}
+	if got := e.Windows(); len(got) != 2 {
+		t.Errorf("windows = %+v, want the valid DSU and the enabled ritual", got)
+	}
+	if e.NeedsSprintStart() {
+		t.Error("an every-week ritual needs no sprint start")
 	}
 }

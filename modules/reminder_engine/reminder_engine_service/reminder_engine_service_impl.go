@@ -250,7 +250,7 @@ func (e *reminderEngineServiceImpl) sendTierIfDue(ctx context.Context, issue jir
 	target := due[len(due)-1]
 	stale := due[:len(due)-1]
 
-	deadline := e.businessHours.DeadlineAfterBusinessSeconds(time.Now(), remaining, cal)
+	deadline := e.businessHours.DeadlineAfterBusinessSeconds(time.Now(), remaining, cal.ForProject(session.ProjectKey))
 	msg := google_chat_notifier_dto.ReminderMessage{
 		IssueKey:             issue.Key,
 		IssueURL:             issueURL,

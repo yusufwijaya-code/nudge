@@ -254,6 +254,102 @@
         }
       </section>
 
+      <section class="card trf-card" data-section="excluded">
+        <header class="card-header">
+          <span class="card-icon accent"><app-icon name="clock" [size]="20" /></span>
+          <div>
+            <h2>Jadwal yang tidak dihitung</h2>
+            <p>Jam yang termasuk dalam jadwal ini tidak dihitung ke dalam waktu tiket {{ l.projectKey }}, meskipun tiket berada pada status yang dihitung. Penyimpanan aturan akan menghitung ulang seluruh sprint dari Jira.</p>
+          </div>
+        </header>
+
+        <div class="trf-ex-block">
+          <h3 class="trf-ex-title">Daily Stand Up (DSU)</h3>
+          <ul class="trf-ex-list" data-dsu>
+            @for (row of dsuRows(); track row.weekday; let i = $index) {
+              <li class="trf-ex-row" [class.on]="row.on" [attr.data-dsu-day]="row.weekday">
+                <label class="trf-ex-check">
+                  <input type="checkbox" class="visually-hidden" [checked]="row.on" (change)="setDsu(i, { on: !row.on })" />
+                  <span class="check-box" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M20 6 9 17l-5-5" /></svg></span>
+                  <span class="trf-ex-day">{{ row.label }}</span>
+                </label>
+                @if (row.on) {
+                  <span class="trf-ex-fields">
+                    <app-time-picker [value]="row.start" (valueChange)="setDsu(i, { start: $event })" [ariaLabel]="'Jam mulai DSU ' + row.label" />
+                    <span class="trf-ex-minutes">
+                      <input type="number" min="1" [max]="maxMinutes" [ngModel]="row.minutes" (ngModelChange)="setDsu(i, { minutes: $event })" (blur)="setDsu(i, { minutes: clampedMinutes(row.minutes) })" [attr.aria-label]="'Durasi DSU ' + row.label + ' (menit)'" />
+                      <span>menit</span>
+                    </span>
+                    <span class="trf-ex-range">{{ row.start }} – {{ slotEnd(row.start, row.minutes) }}</span>
+                  </span>
+                } @else {
+                  <span class="trf-ex-off">Tanpa DSU</span>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+
+        <div class="trf-ex-block">
+          <div class="trf-ex-head">
+            <h3 class="trf-ex-title">Ritual Khusus dan Potongan Tambahan</h3>
+            <button type="button" class="btn btn-ghost btn-sm" data-add-ritual [disabled]="!canAddRitual()" (click)="addRitual()">
+              <app-icon name="plus" [size]="14" /> Tambah Ritual
+            </button>
+          </div>
+          <p class="trf-ex-help">Contoh: Sprint Planning / Grooming pada hari Senin pukul 11:00 selama 6 jam 30 menit, hanya berlaku pada minggu ke-2 sprint.</p>
+          @for (r of rituals(); track $index; let i = $index) {
+            <div class="trf-ex-ritual" [class.off]="!r.enabled" [attr.data-ritual]="i">
+              <div class="trf-ex-ritual-top">
+                <label class="trf-ex-check">
+                  <input type="checkbox" class="visually-hidden" [checked]="r.enabled" (change)="setRitual(i, { enabled: !r.enabled })" />
+                  <span class="check-box" aria-hidden="true"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M20 6 9 17l-5-5" /></svg></span>
+                  <span class="visually-hidden">Ritual aktif</span>
+                </label>
+                <input type="text" class="trf-ex-name" maxlength="60" placeholder="Nama ritual, contoh: Sprint Planning / Grooming" [ngModel]="r.name" (ngModelChange)="setRitual(i, { name: $event })" aria-label="Nama ritual" />
+                <button type="button" class="icon-btn" [attr.aria-label]="'Hapus ritual ' + (r.name || (i + 1))" data-remove-ritual (click)="removeRitual(i)">
+                  <app-icon name="trash" [size]="16" />
+                </button>
+              </div>
+              <div class="trf-ex-grid">
+                <div class="field">
+                  <label>Hari</label>
+                  <app-select [options]="weekdayOptions" [ngModel]="r.weekday" (ngModelChange)="setRitual(i, { weekday: $event })" ariaLabel="Hari ritual" />
+                </div>
+                <div class="field">
+                  <label>Jam mulai</label>
+                  <app-time-picker [value]="r.start" (valueChange)="setRitual(i, { start: $event })" ariaLabel="Jam mulai ritual" />
+                </div>
+                <div class="field">
+                  <label>Durasi (menit)</label>
+                  <input type="number" min="1" [max]="maxMinutes" [ngModel]="r.minutes" (ngModelChange)="setRitual(i, { minutes: $event })" (blur)="setRitual(i, { minutes: clampedMinutes(r.minutes) })" aria-label="Durasi ritual (menit)" />
+                </div>
+                <div class="field">
+                  <label>Frekuensi</label>
+                  <app-select [options]="frequencyOptions" [ngModel]="r.frequency" (ngModelChange)="setRitual(i, { frequency: $event })" ariaLabel="Frekuensi ritual" />
+                </div>
+                @if (r.frequency === 'sprint_week') {
+                  <div class="field">
+                    <label>Minggu sprint</label>
+                    <app-select [options]="sprintWeekOptions" [ngModel]="r.sprintWeek" (ngModelChange)="setRitual(i, { sprintWeek: $event })" ariaLabel="Minggu ke berapa di sprint" />
+                  </div>
+                }
+              </div>
+              <p class="trf-ex-cut" data-cut>
+                <app-icon name="clock" [size]="14" />
+                Potongan waktu: {{ r.start }} – {{ slotEnd(r.start, r.minutes) }} ({{ slotLength(r.minutes) }})
+                <span class="trf-ex-when">{{ r.frequency === 'sprint_week' ? 'Berlaku hanya pada minggu ke-' + r.sprintWeek + ' sprint' : 'Berlaku setiap minggu' }}</span>
+              </p>
+            </div>
+          } @empty {
+            <p class="trf-empty" data-no-rituals>Belum ada ritual khusus yang ditambahkan.</p>
+          }
+        </div>
+        @if (fieldErrors().excluded) {
+          <p class="trf-err" data-excluded-error>{{ fieldErrors().excluded }}</p>
+        }
+      </section>
+
       <section class="card trf-card" data-section="preview">
         <header class="card-header">
           <span class="card-icon accent"><app-icon name="zap" [size]="20" /></span>
