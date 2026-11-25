@@ -97,6 +97,9 @@ var trackingRuleSeedSQL string
 //go:embed 0022_tracking_rule_create_fields.sql
 var trackingRuleCreateFieldsSQL string
 
+//go:embed 0023_jira_account.sql
+var jiraAccountSQL string
+
 // mysqlDeadlockErrNo / mysqlLockWaitTimeoutErrNo are retried: go test runs
 // every package in parallel and each one calls Apply against the same
 // schema, so concurrent DDL/backfill can collide. Every step is
@@ -212,6 +215,10 @@ func apply(db *sql.DB) error {
 	}
 	// Aturan Board › Field form Buat Card — one ADD COLUMN.
 	if err := addColumnIfNotExists(db, trackingRuleCreateFieldsSQL); err != nil {
+		return err
+	}
+	// Admin › Akun Jira — CREATE TABLE IF NOT EXISTS, idempotent.
+	if _, err := db.Exec(jiraAccountSQL); err != nil {
 		return err
 	}
 	// The new toggle starts ON when either old toggle was ON — exactly once

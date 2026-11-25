@@ -1,0 +1,129 @@
+<div class="page-stack">
+  <section class="card jira-account" data-card="current">
+    <header class="card-header with-actions">
+      <span class="card-icon accent"><app-icon name="key" [size]="20" /></span>
+      <div>
+        <h2>Akun yang dipakai sekarang</h2>
+        <p>Akun Jira tempat bot membaca tiket dan bertindak (geser status, dsb).</p>
+      </div>
+      @if (status) {
+        <span class="source-pill" [class.db]="status.source === 'database'" data-source>{{ sourceLabel }}</span>
+      }
+    </header>
+
+    @if (loadError) {
+      <p class="msg error" data-load-error><app-icon name="alert-circle" [size]="16" /> Gagal memuat akun Jira.</p>
+    } @else if (!status) {
+      <div class="ja-skeleton skeleton" aria-busy="true"></div>
+    } @else {
+      <dl class="ja-facts">
+        <div><dt>Email</dt><dd data-email>{{ status.email }}</dd></div>
+        <div><dt>Token</dt><dd><code data-hint>{{ status.tokenHint }}</code></dd></div>
+        @if (status.source === 'database' && status.updatedBy) {
+          <div>
+            <dt>Terakhir diubah</dt>
+            <dd data-updated>{{ status.updatedBy }}<small> · {{ status.updatedDate | date: 'd MMM y, HH:mm:ss' }}</small></dd>
+          </div>
+        }
+      </dl>
+
+      <div class="ja-check" [class.ok]="check?.ok" [class.bad]="check && !check.ok" data-check aria-live="polite">
+        @if (checking) {
+          <span class="spinner small" aria-hidden="true"></span>
+          <span>Memeriksa ke Jira…</span>
+        } @else if (check?.ok) {
+          <app-icon name="check-circle" [size]="18" />
+          <span>
+            Terhubung sebagai <strong data-account>{{ $any(check).account.displayName }}</strong>
+            <small>{{ $any(check).account.emailAddress }}</small>
+          </span>
+        } @else if (check) {
+          <app-icon name="alert-circle" [size]="18" />
+          <span data-check-error>{{ $any(check).message }}</span>
+        }
+        <button type="button" class="btn btn-ghost btn-sm" (click)="runCheck()" [disabled]="checking" data-test>
+          <app-icon name="refresh" [size]="14" /> Uji koneksi
+        </button>
+      </div>
+
+      @if (status.source === 'database') {
+        <div class="card-footer">
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-danger-ghost" [class.loading]="resetting" [disabled]="resetting" (click)="onReset()" data-reset>
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="btn-label"><app-icon name="trash" [size]="16" /> Kembali ke akun env</span>
+          </button>
+        </div>
+      }
+    }
+  </section>
+
+  <section class="card jira-account" data-card="replace">
+    <header class="card-header">
+      <span class="card-icon"><app-icon name="lock" [size]="20" /></span>
+      <div>
+        <h2>Ganti akun Jira</h2>
+        <p>Email dan API token diverifikasi ke Jira dulu, lalu disimpan terenkripsi dan langsung berlaku.</p>
+      </div>
+    </header>
+
+    @if (status && !status.encryptionReady) {
+      <p class="msg error" data-no-key>
+        <app-icon name="alert-circle" [size]="16" />
+        CREDENTIAL_ENCRYPTION_KEY belum diatur di server, jadi token belum bisa disimpan. Akun env tetap dipakai.
+      </p>
+    }
+
+    <div class="ja-layout">
+      <form class="ja-form" (ngSubmit)="onSave()" autocomplete="off">
+        <div class="field">
+          <label for="ja-email">Email Atlassian</label>
+          <input id="ja-email" name="email" type="email" [(ngModel)]="email" placeholder="nama@esb.co.id" autocomplete="off" [attr.disabled]="locked ? '' : null" />
+        </div>
+        <div class="field">
+          <label for="ja-token">API token</label>
+          <div class="input-affix">
+            <input
+              id="ja-token"
+              name="token"
+              [type]="showToken ? 'text' : 'password'"
+              [(ngModel)]="token"
+              placeholder="Tempel token di sini"
+              autocomplete="new-password"
+              [attr.disabled]="locked ? '' : null"
+            />
+            <button type="button" class="affix-btn" [attr.aria-label]="showToken ? 'Sembunyikan token' : 'Tampilkan token'" (click)="showToken = !showToken">
+              <app-icon [name]="showToken ? 'eye-off' : 'eye'" [size]="16" />
+            </button>
+          </div>
+        </div>
+
+        @if (error) {
+          <p class="msg error" data-save-error><app-icon name="alert-circle" [size]="16" /> {{ error }}</p>
+        }
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" [class.loading]="saving" [disabled]="!canSave" data-save>
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="btn-label"><app-icon name="shield-check" [size]="16" /> Simpan &amp; aktifkan</span>
+          </button>
+        </div>
+      </form>
+
+      <aside class="ja-help">
+        <h3>Cara membuat token</h3>
+        <ol>
+          <li>
+            Login sebagai akun yang akan dipakai bot, lalu buka
+            <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener">
+              Atlassian API tokens <app-icon name="external" [size]="13" />
+            </a>
+          </li>
+          <li>Klik <strong>Create API token</strong>, beri nama dan masa berlaku.</li>
+          <li>Copy token-nya, lalu tempel di form ini.</li>
+        </ol>
+        <p class="hint"><app-icon name="info" [size]="13" /> Token punya masa berlaku. Ganti sebelum kedaluwarsa supaya polling dan reminder tidak berhenti.</p>
+      </aside>
+    </div>
+  </section>
+</div>

@@ -14,6 +14,7 @@ import (
 
 	"nudge/base/helpers/curl_helper"
 	"nudge/config"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 )
 
@@ -169,7 +170,7 @@ func (s *jiraClientServiceImpl) FetchAvatar(ctx context.Context, avatarURL strin
 	if err != nil {
 		return nil, "", err
 	}
-	req.Header.Set("Authorization", basicAuthHeader(s.cfg.JiraEmail, s.cfg.JiraAPIToken))
+	req.Header.Set("Authorization", basicAuthHeader(jira_account_holder.Current(s.cfg.JiraEmail, s.cfg.JiraAPIToken)))
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
 		return nil, "", fmt.Errorf("jira_client: FetchAvatar failed: %w", err)

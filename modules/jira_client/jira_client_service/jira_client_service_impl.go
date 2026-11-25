@@ -10,6 +10,7 @@ import (
 
 	"nudge/base/helpers/curl_helper"
 	"nudge/config"
+	"nudge/modules/jira_account/jira_account_holder"
 	"nudge/modules/jira_client/jira_client_dto"
 )
 
@@ -29,7 +30,8 @@ func (s *jiraClientServiceImpl) authHeaders() map[string]string {
 // central credential when cred is nil — the single place every *As method
 // (Chapter 9d/9b) and the plain methods above share for header construction.
 func (s *jiraClientServiceImpl) authHeadersFor(cred *jira_client_dto.Credential) map[string]string {
-	email, token := s.cfg.JiraEmail, s.cfg.JiraAPIToken
+	// The account an admin saved in Admin › Akun Jira, else the env pair.
+	email, token := jira_account_holder.Current(s.cfg.JiraEmail, s.cfg.JiraAPIToken)
 	if cred != nil {
 		email, token = cred.Email, cred.APIToken
 	}

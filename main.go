@@ -63,6 +63,7 @@ import (
 	"nudge/modules/sprint_report/sprint_report_service"
 	"nudge/modules/status_watch/status_watch_repository"
 	"nudge/modules/status_watch/status_watch_service"
+	"nudge/modules/jira_account"
 	"nudge/modules/tracking_rule"
 	"nudge/modules/user_avatar/user_avatar_handler"
 	"nudge/modules/user_avatar/user_avatar_repository"
@@ -177,6 +178,13 @@ func main() {
 
 	userSettingRepo := user_setting_repository.NewUserSettingRepository(db)
 	userSettingSvc := user_setting_service.NewUserSettingService(userSettingRepo, registrationRepo)
+
+	// Admin › Akun Jira: an account an admin saved replaces the env pair for
+	// every Jira call, from the first request on.
+	jiraAccountSvc := jira_account.NewService(&cfg, jira_account.NewRepository(db), jira_account.NewChecker(cfg.JiraBaseURL))
+	if err := jiraAccountSvc.Load(context.Background()); err != nil {
+		log.Fatalf("failed to load the Jira account: %v", err)
+	}
 
 	jiraClientSvc := jira_client_service.NewJiraClientService(&cfg)
 
@@ -436,6 +444,7 @@ func main() {
 	MountIssueCreate(router, &cfg, authSvc, issue_create_handler.New(issueCreateSvc, cfg.JiraBaseURL))
 	MountChatLog(router, &cfg, authSvc, chat_log_handler.New(chatLogRepo, deliveryRouter, registrationRepo))
 	MountTrackingRules(router, &cfg, authSvc, tracking_rule.NewHandler(trackingRuleSvc))
+	MountJiraAccount(router, &cfg, authSvc, jira_account.NewHandler(jiraAccountSvc))
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

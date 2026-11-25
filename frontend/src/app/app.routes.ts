@@ -81,6 +81,13 @@ export const routes: Routes = [
         title: 'Pesan · Admin · Nudge',
         data: { heading: 'Pesan', subheading: 'Chat tiap user dengan Nudge di Google Chat', crumbs: ['Admin', 'Pesan'] },
       },
+      // The central Jira account the bot acts as.
+      {
+        path: 'jira-account',
+        loadComponent: () => import('./features/admin/jira-account/jira-account.component').then((m) => m.JiraAccountComponent),
+        title: 'Akun Jira · Admin · Nudge',
+        data: { heading: 'Akun Jira', subheading: 'Akun yang dipakai bot untuk membaca dan menggeser tiket di Jira', crumbs: ['Admin', 'Akun Jira'] },
+      },
       // Tech Spec "Aturan Board (Admin CRUD)".
       {
         path: 'tracking-rules',
