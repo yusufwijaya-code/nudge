@@ -35,6 +35,12 @@ export const routes: Routes = [
         data: { heading: 'Cuti', subheading: 'Hari cuti tidak dihitung ke waktu tiket' },
       },
       {
+        path: 'calendar',
+        loadComponent: () => import('./features/dashboard/calendar/calendar.component').then((m) => m.CalendarComponent),
+        title: 'Kalender · Nudge',
+        data: { heading: 'Kalender', subheading: 'Hari dan jam yang tidak dihitung ke waktu tiket' },
+      },
+      {
         path: 'settings',
         loadComponent: () => import('./features/dashboard/settings/settings.component').then((m) => m.SettingsComponent),
         title: 'Pengaturan · Nudge',

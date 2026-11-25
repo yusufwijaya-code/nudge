@@ -9,7 +9,10 @@ import (
 // count toward a ticket's time: a Daily Stand Up, a Sprint Planning / Grooming.
 // Set per project in Admin > Aturan Board.
 type ExcludedWindow struct {
-	Name    string
+	Name string
+	// Kind is "dsu" or "ritual" (anything else is treated as a ritual); the
+	// calendar uses it to tell the Daily Stand Up apart.
+	Kind    string
 	Weekday time.Weekday
 	// StartMinute is minutes after midnight (WIB): 08:45 is 525.
 	StartMinute int
@@ -105,3 +108,18 @@ func (c HolidayCalendar) ExcludedOn(day time.Time) [][2]time.Time {
 	}
 	return out
 }
+
+// The counted working day, in minutes after midnight (WIB). The time
+// calculation keeps its own copy as hour/minute pairs; a test ties the two together.
+const (
+	WorkStartMinute  = 8*60 + 30
+	WorkEndMinute    = 17*60 + 30
+	LunchStartMinute = 12 * 60
+	LunchEndMinute   = 13 * 60
+)
+
+// DSUKind / RitualKind are the values of ExcludedWindow.Kind.
+const (
+	DSUKind    = "dsu"
+	RitualKind = "ritual"
+)
