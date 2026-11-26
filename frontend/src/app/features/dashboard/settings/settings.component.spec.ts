@@ -108,8 +108,9 @@ describe('SettingsComponent', () => {
 
   it('splits Umum (every board) from Per board (notification cards)', () => {
     openTab('umum');
-    expect(cardNames()).toEqual(['credential']);
+    expect(cardNames()).toEqual(['credential', 'auto-done']);
     expect(visible('app-chat-sender-card')).not.toBeNull();
+    expect(visible('app-auto-done-card')).not.toBeNull(); // right under the personal Jira key it depends on
     expect(visible('.scope-bar')).toBeNull();
 
     openTab('board');
@@ -500,6 +501,7 @@ describe('SettingsComponent in admin mode (#6)', () => {
     expect(card.textContent).toContain('Dipilih sendiri oleh user');
     expect(card.querySelector('input')).toBeNull();
     expect(el.querySelector('[data-card="master-switch"]')).toBeNull();
+    expect(el.querySelector('app-auto-done-card')).toBeNull(); // the switch is the user's own, never an admin's
     expect(TestBed.inject(NotificationSwitchService).state()).toBeNull();
   });
 });

@@ -12,7 +12,7 @@ import {
 import { BoardContextService, BoardSummary } from '../../../core/services/board-context.service';
 import { statusTone } from '../board-page/board-format';
 import { LiveClockService } from '../../../core/services/live-clock.service';
-import { LiveTime, liveTime } from '../../../core/live-time';
+import { DEFAULT_DEVIATION_CAP, LiveTime, liveTime } from '../../../core/live-time';
 import { BoardAvatarComponent } from '../../../shared/ui/board-avatar.component';
 import { IssueTypeIconComponent } from '../../../shared/ui/issue-type-icon.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -213,8 +213,10 @@ export class HomeComponent {
   protected readonly dur = shortDuration;
   /** The ticking numbers of a running ticket (see core/live-time.ts). */
   protected live(t: TicketCard): LiveTime {
-    return liveTime(t, this.clock.now());
+    return liveTime(t, this.clock.now(), this.cap());
   }
+  /** The deviation (percent) an admin allows, from the board answer. */
+  protected cap = signal(DEFAULT_DEVIATION_CAP);
   private lastStaleReload = 0;
   protected movingKey = signal<string | null>(null);
   /** The button that started the running move; only that one shows the spinner. */
@@ -455,6 +457,7 @@ export class HomeComponent {
       next: (res) => {
         // A background reply for a board the user has since left is stale.
         if (silent && boardId !== this.boardContext.selectedId()) return;
+        this.cap.set(res.deviationCapPercent ?? DEFAULT_DEVIATION_CAP);
         this.cards.set((res.columns ?? []).flatMap((col) => col.cards ?? []));
         this.related.set(res.related ?? []);
         this.boardLoading.set(false);

@@ -1,0 +1,51 @@
+<section class="card ad-card" data-card="auto-done">
+  <header class="card-header">
+    <span class="card-icon"><app-icon name="check-circle" [size]="20" /></span>
+    <div>
+      <h2>Geser otomatis ke selesai</h2>
+      <p>Tiket digeser sendiri ke status selesai begitu waktunya habis tepat di budget.</p>
+    </div>
+  </header>
+
+  @if (status(); as s) {
+    <label class="toggle-row ad-toggle" [class.disabled]="!s.hasCredential">
+      <span class="toggle-text">
+        <strong>{{ s.active ? 'Geser otomatis aktif' : s.enabled ? 'Menunggu Jira API Key Pribadi' : 'Geser otomatis mati' }}</strong>
+        <small>
+          @if (s.active) {
+            Tiketmu yang waktunya habis akan digeser ke status selesai board-nya, lalu kamu dapat DM.
+          } @else if (!s.hasCredential) {
+            Belum bisa dinyalakan: isi Jira API Key Pribadi dulu.
+          } @else {
+            Nyalakan supaya tiket yang waktunya habis tidak perlu kamu geser manual.
+          }
+        </small>
+      </span>
+      <input type="checkbox" class="switch" data-auto-done-switch #box [checked]="s.enabled" [disabled]="saving()" (change)="toggle(box)" aria-label="Geser otomatis ke selesai" />
+    </label>
+
+    @if (!s.hasCredential) {
+      <p class="ad-lock" data-needs-key>
+        <app-icon name="key" [size]="14" />
+        Fitur ini butuh Jira API Key Pribadi, supaya perpindahan statusnya tercatat di Jira atas namamu, bukan akun bot.
+      </p>
+    }
+    @if (error()) {
+      <p class="ad-err" role="alert" data-error>{{ error() }}</p>
+    }
+
+    <ul class="ad-notes">
+      <li>Status tujuannya mengikuti <strong>status selesai tiap board</strong> (Aturan Board), jadi tiap board bisa berbeda, misalnya Code Completed atau Done.</li>
+      <li>Hanya tiket yang sedang dikerjakan. Tiket yang sedang di-review atau sudah selesai tidak disentuh.</li>
+      <li>Dicek tiap 30 detik, dan tiap tiket hanya dicoba sekali per pengerjaan.</li>
+      <li>Kalau Jira menolak (misalnya ada field wajib yang belum terisi), tiket tidak digeser dan kamu diberi tahu lewat DM.</li>
+    </ul>
+  } @else if (loadError()) {
+    <p class="msg error ad-pad" data-load-error>
+      <app-icon name="alert-circle" [size]="16" /> Gagal memuat pengaturan.
+      <button type="button" class="btn btn-ghost btn-sm" (click)="load()">Coba lagi</button>
+    </p>
+  } @else {
+    <div class="ad-skeleton skeleton" aria-busy="true"></div>
+  }
+</section>

@@ -1,0 +1,20 @@
+.ad-card { padding-bottom: 24px; }
+.ad-pad { margin: 0 24px 20px; }
+.ad-skeleton { height: 72px; margin: 0 24px 4px; border-radius: var(--radius); }
+.ad-toggle { margin: 4px 24px 0; &.disabled { opacity: .8; } }
+.ad-lock {
+  display: flex; align-items: flex-start; gap: 8px; margin: 16px 24px 0; padding: 12px 14px; font-size: .84rem; line-height: 1.55;
+  border: 1px solid rgba(245, 158, 11, .4); border-radius: var(--radius); background: var(--accent-soft); color: var(--text);
+  app-icon { flex: none; margin-top: 2px; color: #b4630a; }
+}
+.ad-err { margin: 12px 24px 0; font-size: .84rem; color: var(--error-strong); }
+.ad-notes {
+  margin: 18px 24px 0; padding: 16px 20px 16px 38px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+  font-size: .84rem; line-height: 1.65; color: var(--text-muted);
+  li + li { margin-top: 10px; }
+  strong { color: var(--text); }
+}
+@media (max-width: 640px) {
+  .ad-toggle, .ad-lock, .ad-err, .ad-notes, .ad-pad { margin-left: 16px; margin-right: 16px; }
+  .ad-notes { padding: 14px 14px 14px 30px; }
+}

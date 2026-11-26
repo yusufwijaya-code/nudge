@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"nudge/modules/app_setting/app_setting_holder"
 	"strconv"
 	"time"
 
@@ -157,10 +158,10 @@ func (h *userDashboardHandlerImpl) ResetNotificationSettings(c *gin.Context) {
 func (h *userDashboardHandlerImpl) UpdateNotificationsSwitch(c *gin.Context) {
 	h.settings.UpdateNotificationsSwitch(c)
 }
-func (h *userDashboardHandlerImpl) Mute(c *gin.Context)             { h.settings.Mute(c) }
-func (h *userDashboardHandlerImpl) Unmute(c *gin.Context)           { h.settings.Unmute(c) }
-func (h *userDashboardHandlerImpl) ListBoards(c *gin.Context)       { h.settings.ListBoards(c) }
-func (h *userDashboardHandlerImpl) SaveCredential(c *gin.Context)   { h.settings.SaveCredential(c) }
+func (h *userDashboardHandlerImpl) Mute(c *gin.Context)           { h.settings.Mute(c) }
+func (h *userDashboardHandlerImpl) Unmute(c *gin.Context)         { h.settings.Unmute(c) }
+func (h *userDashboardHandlerImpl) ListBoards(c *gin.Context)     { h.settings.ListBoards(c) }
+func (h *userDashboardHandlerImpl) SaveCredential(c *gin.Context) { h.settings.SaveCredential(c) }
 func (h *userDashboardHandlerImpl) SaveCredentialExpiry(c *gin.Context) {
 	h.settings.SaveCredentialExpiry(c)
 }
@@ -213,7 +214,8 @@ func (h *userDashboardHandlerImpl) GetBoard(c *gin.Context) {
 	if related == nil {
 		related = []user_dashboard_dto.Card{}
 	}
-	c.JSON(http.StatusOK, gin.H{"columns": columns, "related": related})
+	// deviationCapPercent: the deviation an admin allows (Pengaturan Aplikasi), for the "Target" percentage of a running ticket.
+	c.JSON(http.StatusOK, gin.H{"columns": columns, "related": related, "deviationCapPercent": app_setting_holder.DeviationCapPercent()})
 }
 
 func (h *userDashboardHandlerImpl) GetTeam(c *gin.Context) {
