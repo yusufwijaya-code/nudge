@@ -3928,10 +3928,3 @@ app-chat-logs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .budget-bar .budget-fill { transition: none; }
 }
 
-/* Target percentage of a running ticket (against the allowed deviation). */
-.target-chip {
-  align-self: center; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; white-space: nowrap;
-  background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border);
-  transition: background-color 400ms var(--ease), color 400ms var(--ease), border-color 400ms var(--ease);
-  &.hit { background: var(--success-soft); color: var(--success); border-color: rgba(18, 161, 80, 0.35); }
-}

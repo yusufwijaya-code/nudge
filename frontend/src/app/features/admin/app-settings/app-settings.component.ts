@@ -5,6 +5,7 @@ import { AppSettings, AppSettingsService, MAX_DEVIATION, MIN_DEVIATION } from '.
 import { ToastService } from '../../../core/ui/toast.service';
 import { IconComponent } from '../../../shared/ui/icon.component';
 import { JiraAccountComponent } from '../jira-account/jira-account.component';
+import { CredentialsCardComponent } from './credentials-card.component';
 
 /**
  * Pengaturan Aplikasi: values that used to be hard-coded, then the central Jira
@@ -15,7 +16,7 @@ import { JiraAccountComponent } from '../jira-account/jira-account.component';
 @Component({
   selector: 'app-app-settings',
   standalone: true,
-  imports: [FormsModule, DatePipe, IconComponent, JiraAccountComponent],
+  imports: [FormsModule, DatePipe, IconComponent, JiraAccountComponent, CredentialsCardComponent],
   templateUrl: './app-settings.component.html',
   styleUrl: './app-settings.component.scss',
 })

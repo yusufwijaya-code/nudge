@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"nudge/modules/app_credential"
 	"nudge/modules/app_setting"
 	"nudge/modules/auto_done"
 	"nudge/modules/onboarding"
@@ -234,4 +235,11 @@ func MountAutoDone(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.Au
 	api := r.Group(cfg.BasePath + "/api/dashboard")
 	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
 	auto_done.Routes(api, h)
+}
+
+// MountAppCredentials mounts Pengaturan Aplikasi › Kredensial & token (admin only).
+func MountAppCredentials(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *app_credential.Handler) {
+	admin := r.Group(cfg.BasePath + "/api/dashboard/admin")
+	admin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg), auth_middleware.AdminMiddleware(cfg))
+	app_credential.AdminRoutes(admin, h)
 }

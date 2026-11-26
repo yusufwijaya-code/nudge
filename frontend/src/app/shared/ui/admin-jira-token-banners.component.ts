@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ExpiringUser, JiraAccountService, JiraAccountStatus } from '../../core/services/jira-account.service';
+import { AppCredentialService, ExpiringCredential } from '../../core/services/app-credential.service';
 import { expiryDateLabel, expiryDistance, tokenExpiry } from '../../core/jira-token-expiry';
 import { IconComponent } from './icon.component';
 import { JiraTokenBannerComponent } from './jira-token-banner.component';
@@ -27,6 +28,16 @@ import { JiraTokenBannerComponent } from './jira-token-banner.component';
         <app-jira-token-banner subject="bot" [email]="a.email" [expiresAt]="a.expiresAt" link="/admin/app-settings" linkLabel="Ganti token" />
       }
     }
+    @if (credentials().length; as n) {
+      <section class="token-banner" [class.expired]="credsExpired()" data-credentials role="status">
+        <app-icon [name]="credsExpired() ? 'alert-circle' : 'lock'" [size]="20" />
+        <p>
+          <strong>{{ n }} kredensial aplikasi {{ credsExpired() ? 'sudah atau hampir kedaluwarsa' : 'akan kedaluwarsa' }}:</strong>
+          {{ credsSummary() }}
+        </p>
+        <a class="btn btn-primary btn-sm" routerLink="/admin/app-settings">Buka Pengaturan Aplikasi</a>
+      </section>
+    }
     @if (users().length; as n) {
       <section class="token-banner" [class.expired]="anyExpired()" data-users role="status">
         <app-icon [name]="anyExpired() ? 'alert-circle' : 'key'" [size]="20" />
@@ -41,9 +52,27 @@ import { JiraTokenBannerComponent } from './jira-token-banner.component';
 })
 export class AdminJiraTokenBannersComponent implements OnInit {
   private api = inject(JiraAccountService);
+  private credApi = inject(AppCredentialService);
 
   protected readonly account = signal<JiraAccountStatus | null>(null);
   protected readonly users = signal<ExpiringUser[]>([]);
+  /** Application credentials (Gemini key, OAuth tokens, ...) near or past their expiry day. */
+  protected readonly credentials = signal<ExpiringCredential[]>([]);
+
+  protected readonly credsExpired = computed(() => this.credentials().some((c) => tokenExpiry(c.expiresAt).level === 'expired'));
+
+  /** "Gemini API Key (3 hari lagi), Token OAuth Google Groups (20 Nov 2026, 6 hari lalu)". */
+  protected readonly credsSummary = computed(() => {
+    const MAX = 3;
+    const parts = this.credentials()
+      .slice(0, MAX)
+      .map((c) => {
+        const { daysLeft } = tokenExpiry(c.expiresAt);
+        return daysLeft === null ? c.name : `${c.name} (${expiryDateLabel(c.expiresAt)}, ${expiryDistance(daysLeft)})`;
+      });
+    const rest = this.credentials().length - MAX;
+    return rest > 0 ? `${parts.join(', ')}, dan ${rest} lainnya` : parts.join(', ');
+  });
 
   protected readonly anyExpired = computed(() => this.users().some((u) => tokenExpiry(u.expiresAt).level === 'expired'));
 
@@ -65,5 +94,6 @@ export class AdminJiraTokenBannersComponent implements OnInit {
     // A failure just leaves the banner out: it must never get in the admin's way.
     this.api.status().subscribe({ next: (s) => this.account.set(s), error: () => undefined });
     this.api.expiringUsers().subscribe({ next: (res) => this.users.set(res.users ?? []), error: () => undefined });
+    this.credApi.expiring().subscribe({ next: (res) => this.credentials.set(res.items ?? []), error: () => undefined });
   }
 }
