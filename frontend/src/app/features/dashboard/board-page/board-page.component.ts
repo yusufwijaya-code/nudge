@@ -4,6 +4,8 @@ import { Subscription } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { DashboardService, TicketCard, TransitionOption } from '../../../core/services/dashboard.service';
 import { BoardContextService } from '../../../core/services/board-context.service';
+import { LiveClockService } from '../../../core/services/live-clock.service';
+import { LiveTime, liveTime } from '../../../core/live-time';
 import { ToastService } from '../../../core/ui/toast.service';
 import { ConfirmService } from '../../../core/ui/confirm.service';
 import { MoveFieldsService, MoveRequirement, fieldsRequired } from '../../../core/ui/move-fields.service';
@@ -100,6 +102,17 @@ export class BoardPageComponent {
   /** The ticket just moved: its row is highlighted for a moment after the reload. */
   protected justMoved = signal<string | null>(null);
   private loadSub?: Subscription;
+  protected clock = inject(LiveClockService);
+  private lastStaleReload = 0;
+
+  /** The ticking numbers of a running ticket (see core/live-time.ts). */
+  protected live(card: TicketCard): LiveTime {
+    return liveTime(card, this.clock.now());
+  }
+  /** Elapsed seconds: counting by itself while the clock runs. */
+  protected elapsedOf(card: TicketCard): number {
+    return card.hasBudgetDetail ? this.live(card).elapsed : card.elapsedSeconds;
+  }
   private highlightTimer?: ReturnType<typeof setTimeout>;
   protected menu = signal<MenuState | null>(null);
   protected moving = signal<string | null>(null);
@@ -290,11 +303,26 @@ export class BoardPageComponent {
       const boardId = this.boardContext.selectedId();
       untracked(() => this.load(boardId));
     });
+    // A running clock reached the end of a counted stretch or of a pause: fetch
+    // the fresh state now (quietly, at most once every 5 seconds).
+    effect(() => {
+      const now = this.clock.now();
+      untracked(() => {
+        if (Date.now() - this.lastStaleReload < 5000 || this.loading() || this.pendingMoves > 0) return;
+        const stale = this.columns().some((col) => col.cards.some((c) => c.hasBudgetDetail && liveTime(c, now).stale));
+        if (stale) {
+          this.lastStaleReload = Date.now();
+          this.load(this.boardContext.selectedId(), true);
+        }
+      });
+    });
   }
 
-  protected load(boardId: number | null = this.boardContext.selectedId()): void {
-    this.loading.set(true);
-    this.error.set(null);
+  protected load(boardId: number | null = this.boardContext.selectedId(), silent = false): void {
+    if (!silent) {
+      this.loading.set(true);
+      this.error.set(null);
+    }
     // A newer load (e.g. a quick board switch) wins over an older answer.
     this.loadSub?.unsubscribe();
     this.loadSub = this.dashboard.getBoard(boardId).subscribe({
@@ -307,6 +335,7 @@ export class BoardPageComponent {
         this.openDeepLinkedMove();
       },
       error: () => {
+        if (silent) return;
         this.loading.set(false);
         if (this.loaded()) {
           // Keep the tickets already on screen; just say the refresh failed.
@@ -388,8 +417,9 @@ export class BoardPageComponent {
   }
 
   protected timeTooltip(card: TicketCard): string {
-    const parts = [`Dipakai ${shortDuration(card.elapsedSeconds)}`, `Budget ${shortDuration(card.budgetSeconds)}`];
-    const diff = shortDuration(card.budgetSeconds - card.elapsedSeconds);
+    const parts = [`Dipakai ${shortDuration(this.elapsedOf(card))}`, `Budget ${shortDuration(card.budgetSeconds)}`];
+    const diff = shortDuration(card.budgetSeconds - this.elapsedOf(card));
+    if (card.hasBudgetDetail && this.live(card).frozen) parts.push('Waktu dihentikan (di luar jam hitung)');
     parts.push(this.isOverBudget(card) ? `Lewat ${diff}` : `Sisa ${diff}`);
     const started = card.startedAt ? new Date(card.startedAt) : null;
     if (started && !isNaN(started.getTime())) {
@@ -417,19 +447,19 @@ export class BoardPageComponent {
   }
 
   protected isOverBudget(card: TicketCard): boolean {
-    return this.hasTime(card) && card.elapsedSeconds > card.budgetSeconds;
+    return this.hasTime(card) && this.elapsedOf(card) > card.budgetSeconds;
   }
 
   /** "sisa 1j" / "lewat 15m" while running; "di bawah budget 1j" / "lewat 15m" once stopped. */
   protected timeNote(card: TicketCard): string {
-    const diff = shortDuration(card.budgetSeconds - card.elapsedSeconds);
+    const diff = shortDuration(card.budgetSeconds - this.elapsedOf(card));
     if (this.isOverBudget(card)) return `lewat ${diff}`;
     return card.hasBudgetDetail ? `sisa ${diff}` : `di bawah budget ${diff}`;
   }
 
   /** Share of the budget used, capped at 100 for the bar. */
   protected budgetPercent(card: TicketCard): number {
-    return budgetPercent(card);
+    return card.hasBudgetDetail ? this.live(card).barPercent : budgetPercent(card);
   }
 
   protected toggleMenu(card: TicketCard): void {

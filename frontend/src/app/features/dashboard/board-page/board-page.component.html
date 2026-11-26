@@ -247,10 +247,10 @@
 
 <ng-template #timeCell let-card>
   @if (hasTime(card)) {
-    <div class="tb-time" [class.over]="isOverBudget(card)" [class.stopped]="!card.hasBudgetDetail" [attr.title]="timeTooltip(card)" data-time>
-      <span>{{ shortDuration(card.elapsedSeconds) }} / {{ shortDuration(card.budgetSeconds) }}</span>
+    <div class="tb-time" [class.over]="isOverBudget(card)" [class.stopped]="!card.hasBudgetDetail" [class.running]="card.hasBudgetDetail && live(card).running" [class.frozen]="card.hasBudgetDetail && live(card).frozen" [attr.title]="timeTooltip(card)" data-time>
+      <span>{{ shortDuration(elapsedOf(card)) }} / {{ shortDuration(card.budgetSeconds) }}</span>
       <span class="tb-bar"><span [style.width.%]="budgetPercent(card)"></span></span>
-      <small>{{ timeNote(card) }}</small>
+      <small>{{ timeNote(card) }}@if (card.hasBudgetDetail && live(card).frozen) { · <span class="freeze-badge" data-freeze>dihentikan</span> }</small>
     </div>
   } @else {
     <span class="tb-muted">—</span>
