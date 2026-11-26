@@ -32,6 +32,14 @@ type Card struct {
 	// RFC3339, only set when HasBudgetDetail — the dashboard formats them.
 	StartedAt  string `json:"startedAt,omitempty"`
 	DeadlineAt string `json:"deadlineAt,omitempty"`
+	// ServerNow / Counting / NextChangeAt let the page tick the clock by itself:
+	// at ServerNow the elapsed time was ElapsedSeconds and, when Counting, it
+	// grows one second per second until NextChangeAt (lunch, a Daily Stand Up,
+	// the end of the day...); when not Counting the clock is frozen until
+	// NextChangeAt. Only set when HasBudgetDetail.
+	ServerNow    string `json:"serverNow,omitempty"`
+	Counting     bool   `json:"counting"`
+	NextChangeAt string `json:"nextChangeAt,omitempty"`
 	// IssueURL links the card to the ticket in Jira.
 	IssueURL string `json:"issueURL"`
 	// BoardID is the Jira Agile board of the ticket's active sprint (0 =

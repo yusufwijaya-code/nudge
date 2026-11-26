@@ -382,6 +382,12 @@ func (s *userDashboardServiceImpl) attachBudgetDetail(ctx context.Context, card 
 	card.ElapsedSeconds = elapsedSeconds
 	card.BudgetSeconds = budgetSeconds
 	card.DeadlineAt = deadline.Format(time.RFC3339)
+	now := time.Now()
+	card.ServerNow = now.Format(time.RFC3339Nano)
+	card.Counting = s.businessHours.IsWithinBusinessHours(now, cal)
+	if next, ok := business_hours_service.NextCountingChange(now, cal); ok {
+		card.NextChangeAt = next.Format(time.RFC3339)
+	}
 	if session.CurrentSessionStartedDate != nil && !session.CurrentSessionStartedDate.IsZero() {
 		card.StartedAt = session.CurrentSessionStartedDate.Format(time.RFC3339)
 	}

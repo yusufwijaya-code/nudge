@@ -378,7 +378,7 @@
 </ng-template>
 
 <ng-template #ticketRow let-t let-i="i" let-review="review" let-branch="branch" let-node="node" let-scope="scope">
-            <li class="ticket-row" [class.ticket-branch]="branch" [attr.data-level]="t.hasBudgetDetail ? t.level : 'untracked'" [style.--i]="i">
+            <li class="ticket-row" [class.ticket-branch]="branch" [class.running]="t.hasBudgetDetail && live(t).running" [class.frozen]="t.hasBudgetDetail && live(t).frozen" [attr.data-level]="t.hasBudgetDetail ? live(t).level : 'untracked'" [style.--i]="i">
               <div class="ticket-main">
                 <div class="ticket-title">
                   @if (!boardContext.selected() && boardOf(t); as b) {
@@ -391,22 +391,26 @@
                   <span class="ticket-summary">{{ t.summary }}</span>
                 </div>
                 @if (t.hasBudgetDetail) {
-                  <div class="budget-bar" role="progressbar" [attr.aria-valuenow]="t.percent" aria-valuemin="0" aria-valuemax="100">
-                    <span class="budget-fill" [style.width.%]="t.percent > 100 ? 100 : t.percent"></span>
+                  @let lv = live(t);
+                  <div class="budget-bar" role="progressbar" [attr.aria-valuenow]="lv.percent" aria-valuemin="0" aria-valuemax="100">
+                    <span class="budget-fill" [style.width.%]="lv.barPercent"></span>
                   </div>
                   <div class="ticket-meta">
-                    <span class="budget-pct">{{ t.percent }}%</span>
-                    <span data-meta="elapsed">Berjalan <b>{{ t.elapsedText }}</b> dari {{ t.budgetText }} ({{ t.storyPoints | number: '1.0-1' }} SP)</span>
-                    @if (t.level === 'over') {
-                      <span class="meta-strong" data-meta="remaining">Lewat {{ t.remainingText }}</span>
+                    <span class="budget-pct">{{ lv.percent }}%</span>
+                    <span data-meta="elapsed">Berjalan <b>{{ dur(lv.elapsed) }}</b> dari {{ t.budgetText }} ({{ t.storyPoints | number: '1.0-1' }} SP)</span>
+                    @if (lv.level === 'over') {
+                      <span class="meta-strong" data-meta="remaining">Lewat {{ dur(lv.remaining) }}</span>
                     } @else {
-                      <span data-meta="remaining">Sisa <b>{{ t.remainingText }}</b></span>
+                      <span data-meta="remaining">Sisa <b>{{ dur(lv.remaining) }}</b></span>
                       @if (t.deadlineText) {
                         <span data-meta="deadline">Selesai sebelum {{ t.deadlineText }}</span>
                       }
                     }
                     @if (t.startedText) {
                       <span data-meta="started">Mulai {{ t.startedText }}</span>
+                    }
+                    @if (lv.frozen) {
+                      <span class="freeze-badge" data-freeze title="Sekarang di luar jam kerja atau di jadwal yang tidak dihitung (istirahat, DSU, libur, cuti). Waktu berhenti dulu, status tetap bisa digeser."><app-icon name="moon" [size]="12" /> Waktu dihentikan</span>
                     }
                   </div>
                 } @else {

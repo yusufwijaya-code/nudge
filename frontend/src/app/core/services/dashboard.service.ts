@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, tap } from 'rxjs';
+import { LiveClockService } from './live-clock.service';
 import { environment } from '../../../environments/environment';
 import { boardParams } from './board.service';
 import { MoveRequirement } from '../ui/move-fields.service';
@@ -29,6 +30,10 @@ export interface TicketCard {
   startedAt?: string;
   /** RFC3339: when the budget runs out in business hours. */
   deadlineAt?: string;
+  /** Live clock (see core/live-time.ts): when elapsedSeconds was measured, whether time counts now, and when that next changes. */
+  serverNow?: string;
+  counting?: boolean;
+  nextChangeAt?: string;
   /** Set on a branch: the active-sprint ticket this subtask/linked item hangs under. */
   parentKey?: string;
   parentSummary?: string;
@@ -89,11 +94,18 @@ export interface TicketTransitions {
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
   private http = inject(HttpClient);
+  private clock = inject(LiveClockService);
   private base = `${environment.apiBasePath}/api/dashboard`;
 
   /** Tickets in active sprints — one board's, or every board's when null. */
   getBoard(boardId: number | null = null): Observable<BoardResponse> {
-    return this.http.get<BoardResponse>(`${this.base}/board`, { params: boardParams(boardId) });
+    return this.http.get<BoardResponse>(`${this.base}/board`, { params: boardParams(boardId) }).pipe(
+      // The live clocks tick on the server's time.
+      tap((res) => {
+        const stamped = (res.columns ?? []).flatMap((c) => c.cards ?? []).find((c) => c.serverNow);
+        if (stamped) this.clock.calibrate(stamped.serverNow);
+      }),
+    );
   }
 
   /** Without sprints: just the sprint list. With sprints: the report for them. */

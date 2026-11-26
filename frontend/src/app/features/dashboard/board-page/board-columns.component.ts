@@ -1,6 +1,8 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { DashboardService, TicketCard, TransitionOption } from '../../../core/services/dashboard.service';
 import { budgetPercent, shortDuration, statusTone } from './board-format';
+import { LiveClockService } from '../../../core/services/live-clock.service';
+import { LiveTime, liveTime } from '../../../core/live-time';
 import { IssueTypeIconComponent } from '../../../shared/ui/issue-type-icon.component';
 
 export interface ColumnView { status: string; cards: TicketCard[]; }
@@ -16,6 +18,17 @@ export interface MoveRequest { card: TicketCard; option: TransitionOption; }
 })
 export class BoardColumnsComponent {
   private dashboard = inject(DashboardService);
+  private clock = inject(LiveClockService);
+  /** The ticking numbers of a running ticket (see core/live-time.ts). */
+  protected live(card: TicketCard): LiveTime {
+    return liveTime(card, this.clock.now());
+  }
+  protected elapsedOf(card: TicketCard): number {
+    return card.hasBudgetDetail ? this.live(card).elapsed : card.elapsedSeconds;
+  }
+  protected barOf(card: TicketCard): number {
+    return card.hasBudgetDetail ? this.live(card).barPercent : budgetPercent(card);
+  }
   columns = input.required<ColumnView[]>();
   branchCount = input<(key: string) => number>(() => 0);
   moving = input<string | null>(null);

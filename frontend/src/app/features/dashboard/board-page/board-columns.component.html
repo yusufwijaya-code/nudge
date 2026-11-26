@@ -7,19 +7,20 @@
       <div class="kb-cards">
         @for (card of col.cards; track card.issueKey) {
           <article class="kb-card" [attr.data-kcard]="card.issueKey" [attr.draggable]="!touch && moving() !== card.issueKey"
-            [class.busy]="moving() === card.issueKey" [class.dragging]="dragging()?.issueKey === card.issueKey"
+            [class.busy]="moving() === card.issueKey" [class.running]="card.hasBudgetDetail && live(card).running" [class.frozen]="card.hasBudgetDetail && live(card).frozen" [class.dragging]="dragging()?.issueKey === card.issueKey"
             (dragstart)="onDragStart($event, card)" (dragend)="onDragEnd()">
             <span class="ticket-id"><app-issue-type-icon [name]="card.issueType" [iconUrl]="card.issueTypeIconUrl" /><a class="ticket-key" [href]="card.issueURL" target="_blank" rel="noopener" draggable="false">{{ card.issueKey }}</a></span>
             <p class="kb-title">{{ card.summary }}</p>
             <footer class="kb-meta">
               <span>{{ card.storyPoints ? card.storyPoints + ' SP' : '— SP' }}</span>
               @if (card.hasBudgetDetail || card.timeRecorded) {
-                <span [class.over]="card.elapsedSeconds > card.budgetSeconds">{{ shortDuration(card.elapsedSeconds) }} / {{ shortDuration(card.budgetSeconds) }}</span>
+                <span [class.over]="elapsedOf(card) > card.budgetSeconds">{{ shortDuration(elapsedOf(card)) }} / {{ shortDuration(card.budgetSeconds) }}</span>
+                @if (card.hasBudgetDetail && live(card).frozen) { <span class="freeze-badge" data-freeze title="Waktu dihentikan: di luar jam hitung. Status tetap bisa digeser.">dihentikan</span> }
               }
               @if (branchCount()(card.issueKey)) { <span>↳ {{ branchCount()(card.issueKey) }}</span> }
             </footer>
             @if (card.budgetSeconds) {
-              <span class="kb-bar" [class.over]="card.elapsedSeconds > card.budgetSeconds"><span [style.width.%]="budgetPercent(card)"></span></span>
+              <span class="kb-bar" [class.over]="elapsedOf(card) > card.budgetSeconds"><span [style.width.%]="barOf(card)"></span></span>
             }
           </article>
         } @empty {

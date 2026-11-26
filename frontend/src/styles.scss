@@ -3888,3 +3888,42 @@ app-chat-logs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .tb-chip { transition: none; }
   .tb-page > * { animation: none !important; }
 }
+
+/* ── Live clock: a running ticket's bar moves, a stopped one is frozen ───────── */
+@keyframes bar-stripes { to { background-position: 18px 0; } }
+@keyframes freeze-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(111, 159, 216, 0), inset 0 0 0 0 rgba(111, 159, 216, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(111, 159, 216, 0.2), inset 0 0 22px rgba(111, 159, 216, 0.14); }
+}
+@keyframes freeze-badge-in { from { opacity: 0; transform: translateY(3px) scale(0.92); } to { opacity: 1; transform: none; } }
+
+.budget-bar .budget-fill { transition: width 1s linear, background-color 400ms var(--ease); }
+.ticket-row.running .budget-fill {
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.3) 50%, rgba(255, 255, 255, 0.3) 75%, transparent 75%);
+  background-size: 18px 18px;
+  animation: bar-grow 700ms var(--ease) both, bar-stripes 900ms linear infinite;
+}
+
+/* Time that does not count (lunch, DSU, evening, weekend, holiday, leave): the card is frozen, still movable. */
+.ticket-row.frozen[data-level] {
+  --level: #6f9fd8;
+  border-color: #b9d4f0;
+  background: linear-gradient(180deg, #f3f8ff 0%, var(--surface) 70%);
+  animation: fade-up 360ms var(--ease) calc(var(--i, 0) * 40ms) backwards, freeze-breathe 3.4s ease-in-out infinite;
+}
+.ticket-row.frozen .budget-fill {
+  background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.45) 0 4px, transparent 4px 8px);
+  animation: none;
+}
+.ticket-row.frozen .budget-pct, .ticket-row.frozen .ticket-meta b { color: #2f5d9a; }
+
+.freeze-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px; border-radius: 999px;
+  background: #e7f0fb; color: #2f5d9a; font-size: 0.72rem; font-weight: 700; white-space: nowrap;
+  animation: freeze-badge-in 400ms var(--ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticket-row.running .budget-fill, .ticket-row.frozen[data-level], .freeze-badge { animation: none; }
+  .budget-bar .budget-fill { transition: none; }
+}

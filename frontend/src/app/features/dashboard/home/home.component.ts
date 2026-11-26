@@ -11,6 +11,8 @@ import {
 } from '../../../core/services/dashboard.service';
 import { BoardContextService, BoardSummary } from '../../../core/services/board-context.service';
 import { statusTone } from '../board-page/board-format';
+import { LiveClockService } from '../../../core/services/live-clock.service';
+import { LiveTime, liveTime } from '../../../core/live-time';
 import { BoardAvatarComponent } from '../../../shared/ui/board-avatar.component';
 import { IssueTypeIconComponent } from '../../../shared/ui/issue-type-icon.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -207,6 +209,13 @@ export class HomeComponent {
   protected cards = signal<TicketCard[]>([]);
   /** Subtasks/linked items outside the sprint: only feed the active/review cards. */
   protected related = signal<TicketCard[]>([]);
+  protected clock = inject(LiveClockService);
+  protected readonly dur = shortDuration;
+  /** The ticking numbers of a running ticket (see core/live-time.ts). */
+  protected live(t: TicketCard): LiveTime {
+    return liveTime(t, this.clock.now());
+  }
+  private lastStaleReload = 0;
   protected movingKey = signal<string | null>(null);
   /** The button that started the running move; only that one shows the spinner. */
   protected movingTarget = signal<TransitionTarget | null>(null);
@@ -374,6 +383,20 @@ export class HomeComponent {
       const board = this.reportBoard();
       const loaded = this.boardContext.loaded();
       untracked(() => this.loadReport(board, loaded));
+    });
+
+    // A running clock reached the end of a counted stretch (lunch, a Daily Stand
+    // Up, the end of the day...) or of a pause: fetch the fresh state now instead
+    // of waiting for the next poll. At most once every 5 seconds.
+    effect(() => {
+      const now = this.clock.now();
+      untracked(() => {
+        if (Date.now() - this.lastStaleReload < 5000) return;
+        if (this.cards().some((c) => c.hasBudgetDetail && liveTime(c, now).stale)) {
+          this.lastStaleReload = Date.now();
+          this.refresh();
+        }
+      });
     });
 
     // Live: elapsed/remaining time and statuses are computed server-side per
