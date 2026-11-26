@@ -23,6 +23,7 @@ import { TimePickerComponent } from '../../../shared/ui/time-picker.component';
 import { IconComponent } from '../../../shared/ui/icon.component';
 import { SegIndicatorDirective } from '../../../shared/ui/seg-indicator.directive';
 import { JiraCredentialComponent } from './jira-credential.component';
+import { AutoDoneCardComponent } from './auto-done-card.component';
 import { MyJiraTokenService } from '../../../core/services/my-jira-token.service';
 import { MutePanelComponent, activeUntil, formatWib } from './mute-panel.component';
 import { TierPickerComponent } from './tier-picker.component';
@@ -61,7 +62,7 @@ const CARD_FIELDS: Record<SettingsCard, (keyof NotificationSettings)[]> = {
     BoardAvatarComponent,
     SelectComponent,
     TimePickerComponent,
-    JiraCredentialComponent,
+    JiraCredentialComponent, AutoDoneCardComponent,
     MutePanelComponent,
     TierPickerComponent,
     SegIndicatorDirective,

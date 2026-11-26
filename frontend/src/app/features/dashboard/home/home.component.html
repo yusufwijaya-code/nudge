@@ -397,6 +397,7 @@
                   </div>
                   <div class="ticket-meta">
                     <span class="budget-pct">{{ lv.percent }}%</span>
+                    <span class="target-chip" [class.hit]="lv.target === 100" data-meta="target" [attr.title]="'Capaian terhadap estimasi kalau tiket selesai sekarang: 100% selama selisih waktunya dalam batas deviasi (' + cap() + '%).'">Target {{ lv.target }}%</span>
                     <span data-meta="elapsed">Berjalan <b>{{ dur(lv.elapsed) }}</b> dari {{ t.budgetText }} ({{ t.storyPoints | number: '1.0-1' }} SP)</span>
                     @if (lv.level === 'over') {
                       <span class="meta-strong" data-meta="remaining">Lewat {{ dur(lv.remaining) }}</span>

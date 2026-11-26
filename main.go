@@ -25,6 +25,7 @@ import (
 	"nudge/modules/auth/auth_handler"
 	"nudge/modules/auth/auth_service"
 	"nudge/modules/auth/auth_session_repository"
+	"nudge/modules/auto_done"
 	"nudge/modules/board/board_repository"
 	"nudge/modules/board/board_service"
 	"nudge/modules/board_scope"
@@ -376,6 +377,18 @@ func main() {
 		sprintBackfillSvc.RunDaily(shutdownMgr.Context())
 	}()
 
+	// Geser otomatis ke selesai: a ticket whose time is used up moves to its board's
+	// done status for the users who switched it on (and have their own Jira key).
+	autoDoneSvc := auto_done.NewService(auto_done.Deps{
+		Store: auto_done.NewRepository(db), Sessions: issueSessionRepo, Creds: jiraCredentialSvc, Dashboard: userDashboardSvc,
+		Notifier: deliveryRouter, Calendar: userLeaveSvc, Hours: businessHoursSvc,
+	})
+	shutdownMgr.AddWorker()
+	go func() {
+		defer shutdownMgr.WorkerDone()
+		autoDoneSvc.Run(shutdownMgr.Context())
+	}()
+
 	shutdownMgr.AddWorker()
 	go func() {
 		defer shutdownMgr.WorkerDone()
@@ -540,6 +553,7 @@ func main() {
 	})))
 	MountJiraAccount(router, &cfg, authSvc, jira_account.NewHandler(jiraAccountSvc))
 	MountAppSettings(router, &cfg, authSvc, app_setting.NewHandler(appSettingSvc))
+	MountAutoDone(router, &cfg, authSvc, auto_done.NewHandler(autoDoneSvc))
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

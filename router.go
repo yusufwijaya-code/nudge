@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"nudge/modules/app_setting"
+	"nudge/modules/auto_done"
 	"nudge/modules/onboarding"
 	"nudge/modules/signup"
 
@@ -226,4 +227,11 @@ func MountAppSettings(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service
 	admin := r.Group(cfg.BasePath + "/api/dashboard/admin")
 	admin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg), auth_middleware.AdminMiddleware(cfg))
 	app_setting.AdminRoutes(admin, h)
+}
+
+// MountAutoDone mounts the "geser otomatis ke selesai" switch (Pengaturan > Umum).
+func MountAutoDone(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *auto_done.Handler) {
+	api := r.Group(cfg.BasePath + "/api/dashboard")
+	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
+	auto_done.Routes(api, h)
 }

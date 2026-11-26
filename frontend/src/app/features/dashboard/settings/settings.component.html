@@ -124,6 +124,11 @@
         (credentialChanged)="onCredentialChanged()"
       ></app-jira-credential>
     </section>
+
+    <!-- Geser otomatis ke selesai: needs the personal key above; always the signed-in user's own choice -->
+    @if (!isAdminMode) {
+      <app-auto-done-card [hasCredential]="hasCredential" />
+    }
     </div>
     }
 

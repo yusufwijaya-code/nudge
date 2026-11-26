@@ -30,9 +30,9 @@ describe('HomeComponent · live clock', () => {
   const row = () => el().querySelector('[data-card="active"] .ticket-row') as HTMLElement;
   const meta = (name: string) => row().querySelector(`[data-meta="${name}"]`)?.textContent?.replace(/\s+/g, ' ').trim();
 
-  async function open(card: TicketCard) {
+  async function open(card: TicketCard, cap?: number) {
     dashboard = jasmine.createSpyObj('DashboardService', ['getBoard', 'getSprintReport', 'transitionTicket', 'backfillSprint']);
-    dashboard.getBoard.and.returnValue(of({ columns: [{ status: 'Code Process', cards: [card] }], related: [] } as any));
+    dashboard.getBoard.and.returnValue(of({ columns: [{ status: 'Code Process', cards: [card] }], related: [], deviationCapPercent: cap } as any));
     dashboard.getSprintReport.and.returnValue(of({ availableSprints: [], capPercent: 12, report: null } as any));
     await TestBed.configureTestingModule({
       imports: [HomeComponent],
@@ -99,6 +99,31 @@ describe('HomeComponent · live clock', () => {
     // The throttle: a second later it does not reload again.
     tickTo(2 * 3600 + 6);
     expect(dashboard.getBoard).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a Target percentage that updates by itself and is 100% inside the deviation', async () => {
+    await open(running({ elapsedSeconds: 1800, nextChangeAt: '2026-11-26T18:00:00+07:00' })); // 1800 s of a 4 h budget
+    const chip = () => row().querySelector('[data-meta="target"]') as HTMLElement;
+    const first = Number(chip().textContent!.match(/(\d+)%/)![1]);
+    expect(first).toBeLessThan(100);
+    expect(chip().classList).not.toContain('hit');
+    tickTo(120);
+    expect(Number(chip().textContent!.match(/(\d+)%/)![1])).toBeGreaterThanOrEqual(first);
+    // Inside the band: 4 h * 0.88 = 12672 s, i.e. 10872 s after the answer.
+    tickTo(10872 + 5);
+    expect(chip().textContent).toContain('Target 100%');
+    expect(chip().classList).toContain('hit');
+  });
+
+  it('uses the deviation cap the server sends for the Target', async () => {
+    // 4 h budget, 5 h used: 25% over. Cap 12 → 48%; cap 25 → inside the band → 100%.
+    await open(running({ elapsedSeconds: 18000, counting: false }), 25);
+    expect(row().querySelector('[data-meta="target"]')!.textContent).toContain('Target 100%');
+  });
+
+  it('falls back to the 12% cap when the server does not send one', async () => {
+    await open(running({ elapsedSeconds: 18000, counting: false }));
+    expect(row().querySelector('[data-meta="target"]')!.textContent).toContain('Target 48%');
   });
 
   it('turns over budget while running: the label switches to "Lewat"', async () => {

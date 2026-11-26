@@ -115,6 +115,12 @@ var userIsAdminSQL string
 //go:embed 0027_app_setting.sql
 var appSettingSQL string
 
+//go:embed 0028_user_auto_done.sql
+var userAutoDoneSQL string
+
+//go:embed 0028b_auto_done_log.sql
+var autoDoneLogSQL string
+
 // mysqlDeadlockErrNo / mysqlLockWaitTimeoutErrNo are retried: go test runs
 // every package in parallel and each one calls Apply against the same
 // schema, so concurrent DDL/backfill can collide. Every step is
@@ -238,6 +244,13 @@ func apply(db *sql.DB) error {
 	}
 	// Admin › Pengaturan Aplikasi (deviation cap) — CREATE TABLE IF NOT EXISTS.
 	if _, err := db.Exec(appSettingSQL); err != nil {
+		return err
+	}
+	// Geser otomatis ke selesai: the user's switch and the attempt log.
+	if err := addColumnIfNotExists(db, userAutoDoneSQL); err != nil {
+		return err
+	}
+	if _, err := db.Exec(autoDoneLogSQL); err != nil {
 		return err
 	}
 	// Jira token expiry (banner): one ADD COLUMN on the personal credentials,
