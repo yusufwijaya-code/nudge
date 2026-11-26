@@ -421,7 +421,7 @@
                 <button
                   type="button"
                   class="btn btn-sm btn-soft"
-                  [class.loading]="movingKey() === t.issueKey"
+                  [class.loading]="isMoving(t, 'code-review')"
                   [disabled]="movingKey() !== null"
                   (click)="move(t, 'code-review')"
                 >
@@ -433,7 +433,7 @@
                 <button
                   type="button"
                   class="btn btn-sm btn-soft"
-                  [class.loading]="movingKey() === t.issueKey"
+                  [class.loading]="isMoving(t, 'code-completed')"
                   [disabled]="movingKey() !== null"
                   (click)="move(t, 'code-completed')"
                 >
@@ -441,8 +441,9 @@
                   <span class="btn-label"><app-icon name="send" [size]="14" /> Code Completed</span>
                 </button>
                 } @else {
-                <button type="button" class="btn btn-sm btn-ghost" [disabled]="movingKey() !== null" (click)="move(t, 'todo')">
-                  To Do
+                <button type="button" class="btn btn-sm btn-ghost" [class.loading]="isMoving(t, 'todo')" [disabled]="movingKey() !== null" (click)="move(t, 'todo')">
+                  <span class="spinner" aria-hidden="true"></span>
+                  <span class="btn-label">To Do</span>
                 </button>
                 }
               </div>
@@ -474,7 +475,7 @@
                 <button
                   type="button"
                   class="btn btn-sm btn-soft"
-                  [class.loading]="movingKey() === t.issueKey"
+                  [class.loading]="isMoving(t, 'code-process')"
                   [disabled]="movingKey() !== null"
                   (click)="move(t, 'code-process')"
                 >
