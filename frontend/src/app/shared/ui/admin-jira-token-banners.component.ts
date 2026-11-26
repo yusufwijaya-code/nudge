@@ -21,10 +21,10 @@ import { JiraTokenBannerComponent } from './jira-token-banner.component';
           <p>
             <strong>Belum ada akun Jira untuk bot.</strong> Polling tiket, reminder, dan geser status tidak berjalan sampai akun diisi.
           </p>
-          <a class="btn btn-primary btn-sm" routerLink="/admin/jira-account">Isi akun Jira</a>
+          <a class="btn btn-primary btn-sm" routerLink="/admin/app-settings">Isi akun Jira</a>
         </section>
       } @else {
-        <app-jira-token-banner subject="bot" [email]="a.email" [expiresAt]="a.expiresAt" link="/admin/jira-account" linkLabel="Ganti token" />
+        <app-jira-token-banner subject="bot" [email]="a.email" [expiresAt]="a.expiresAt" link="/admin/app-settings" linkLabel="Ganti token" />
       }
     }
     @if (users().length; as n) {

@@ -38,7 +38,7 @@ describe('AdminJiraTokenBannersComponent', () => {
     const banner = el().querySelector('[data-no-account]') as HTMLElement;
     expect(banner.textContent).toContain('Belum ada akun Jira');
     expect(banner.classList).toContain('expired');
-    expect((banner.querySelector('a') as HTMLAnchorElement).getAttribute('href')).toBe('/admin/jira-account');
+    expect((banner.querySelector('a') as HTMLAnchorElement).getAttribute('href')).toBe('/admin/app-settings');
     expect(el().querySelector('.token-banner[data-subject="bot"]')).toBeNull();
   });
 

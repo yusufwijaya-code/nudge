@@ -87,13 +87,15 @@ export const routes: Routes = [
         title: 'Pesan · Admin · Nudge',
         data: { heading: 'Pesan', subheading: 'Chat tiap user dengan Nudge di Google Chat', crumbs: ['Admin', 'Pesan'] },
       },
-      // The central Jira account the bot acts as.
+      // Pengaturan Aplikasi: the deviation, and the central Jira account the bot acts as.
       {
-        path: 'jira-account',
-        loadComponent: () => import('./features/admin/jira-account/jira-account.component').then((m) => m.JiraAccountComponent),
-        title: 'Akun Jira · Admin · Nudge',
-        data: { heading: 'Akun Jira', subheading: 'Akun yang dipakai bot untuk membaca dan menggeser tiket di Jira', crumbs: ['Admin', 'Akun Jira'] },
+        path: 'app-settings',
+        loadComponent: () => import('./features/admin/app-settings/app-settings.component').then((m) => m.AppSettingsComponent),
+        title: 'Pengaturan Aplikasi · Admin · Nudge',
+        data: { heading: 'Pengaturan Aplikasi', subheading: 'Nilai yang berlaku untuk seluruh aplikasi, dan akun Jira yang dipakai bot', crumbs: ['Admin', 'Pengaturan Aplikasi'] },
       },
+      // The old address of the Jira account page (it moved into Pengaturan Aplikasi).
+      { path: 'jira-account', pathMatch: 'full', redirectTo: 'app-settings' },
       // Tech Spec "Aturan Board (Admin CRUD)".
       {
         path: 'tracking-rules',

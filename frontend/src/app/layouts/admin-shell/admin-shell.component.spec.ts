@@ -27,9 +27,9 @@ describe('AdminShellComponent', () => {
 
   it('renders the admin menu items', () => {
     const links = Array.from(el().querySelectorAll('.sidebar-nav .nav-item')).map((a) => a.textContent!.trim());
-    expect(links).toEqual(['Dashboard', 'User', 'Broadcast Message', 'Pesan', 'Aturan Board', 'Akun Jira']);
+    expect(links).toEqual(['Dashboard', 'User', 'Broadcast Message', 'Pesan', 'Aturan Board', 'Pengaturan Aplikasi']);
     const hrefs = Array.from(el().querySelectorAll('.sidebar-nav .nav-item')).map((a) => a.getAttribute('href'));
-    expect(hrefs).toEqual(['/admin', '/admin/users', '/admin/broadcast', '/admin/chat-logs', '/admin/tracking-rules', '/admin/jira-account']);
+    expect(hrefs).toEqual(['/admin', '/admin/users', '/admin/broadcast', '/admin/chat-logs', '/admin/tracking-rules', '/admin/app-settings']);
   });
 
   it('has a Dashboard Utama button at the bottom of the sidebar, not in the top bar', () => {

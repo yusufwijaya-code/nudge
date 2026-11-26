@@ -18,7 +18,7 @@ function stubbed(list: typeof routes): typeof routes {
 }
 
 const DASHBOARD = ['/onboarding', '/dashboard', '/dashboard/board', '/dashboard/leave', '/dashboard/calendar', '/dashboard/settings'];
-const ADMIN = ['/admin', '/admin/users', '/admin/users/8', '/admin/broadcast', '/admin/chat-logs', '/admin/jira-account', '/admin/tracking-rules', '/admin/tracking-rules/new', '/admin/tracking-rules/CORE'];
+const ADMIN = ['/admin', '/admin/users', '/admin/users/8', '/admin/broadcast', '/admin/chat-logs', '/admin/app-settings', '/admin/tracking-rules', '/admin/tracking-rules/new', '/admin/tracking-rules/CORE'];
 
 /**
  * A page refresh = a brand-new app (session not loaded yet) opened straight on

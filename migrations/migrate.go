@@ -112,6 +112,9 @@ var trackingRuleExcludedSQL string
 //go:embed 0026_user_is_admin.sql
 var userIsAdminSQL string
 
+//go:embed 0027_app_setting.sql
+var appSettingSQL string
+
 // mysqlDeadlockErrNo / mysqlLockWaitTimeoutErrNo are retried: go test runs
 // every package in parallel and each one calls Apply against the same
 // schema, so concurrent DDL/backfill can collide. Every step is
@@ -231,6 +234,10 @@ func apply(db *sql.DB) error {
 	}
 	// Admin › Akun Jira — CREATE TABLE IF NOT EXISTS, idempotent.
 	if _, err := db.Exec(jiraAccountSQL); err != nil {
+		return err
+	}
+	// Admin › Pengaturan Aplikasi (deviation cap) — CREATE TABLE IF NOT EXISTS.
+	if _, err := db.Exec(appSettingSQL); err != nil {
 		return err
 	}
 	// Jira token expiry (banner): one ADD COLUMN on the personal credentials,
