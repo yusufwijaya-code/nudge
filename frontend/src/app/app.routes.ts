@@ -34,6 +34,13 @@ export const routes: Routes = [
         title: 'Cuti · Nudge',
         data: { heading: 'Cuti', subheading: 'Hari cuti tidak dihitung ke waktu tiket' },
       },
+      // Laporan: estimate vs actual, read again from Jira on every run.
+      {
+        path: 'report',
+        loadComponent: () => import('./features/dashboard/report/report.component').then((m) => m.ReportComponent),
+        title: 'Laporan · Nudge',
+        data: { heading: 'Laporan', subheading: 'Estimasi vs waktu aktual, dihitung ulang dari Jira' },
+      },
       {
         path: 'calendar',
         loadComponent: () => import('./features/dashboard/calendar/calendar.component').then((m) => m.CalendarComponent),

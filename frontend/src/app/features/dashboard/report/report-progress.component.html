@@ -1,0 +1,42 @@
+<div class="rp-backdrop" role="presentation">
+  <section class="rp-card" role="dialog" aria-modal="true" aria-labelledby="rp-title" aria-describedby="rp-detail" data-progress>
+    <div class="rp-visual" aria-hidden="true">
+      <span class="rp-ring" [class.done]="progress().state === 'done'"></span>
+      <span class="rp-icon"><app-icon [name]="progress().state === 'done' ? 'check' : 'report'" [size]="26" /></span>
+    </div>
+
+    <h2 id="rp-title" class="rp-title" data-headline>{{ headline() }}</h2>
+    <p id="rp-detail" class="rp-detail" data-detail>{{ detail() }}</p>
+
+    <div class="rp-bar" role="progressbar" [attr.aria-valuenow]="progress().percent" aria-valuemin="0" aria-valuemax="100" aria-label="Kemajuan laporan">
+      <span class="rp-fill" [style.width.%]="progress().percent"></span>
+    </div>
+    <div class="rp-meta">
+      <span data-percent>{{ progress().percent }}%</span>
+      <span data-elapsed>{{ elapsedLabel() }}</span>
+    </div>
+
+    <ol class="rp-steps" aria-label="Tahapan">
+      @for (s of progress().steps; track s; let i = $index) {
+        <li [attr.data-step-state]="stepState(i)" [class]="stepState(i)">
+          <span class="rp-dot">
+            @switch (stepState(i)) {
+              @case ('done') { <app-icon name="check" [size]="12" /> }
+              @case ('active') { <span class="rp-spin"></span> }
+            }
+          </span>
+          <span>{{ s }}</span>
+        </li>
+      }
+    </ol>
+
+    <p class="rp-tip" aria-live="polite">
+      <app-icon name="info" [size]="14" />
+      @for (t of [tips[tip()]]; track t) { <span class="rp-tip-text">{{ t }}</span> }
+    </p>
+
+    @if (progress().state === 'running') {
+      <button type="button" class="btn btn-ghost btn-sm rp-cancel" data-cancel (click)="cancel.emit()">Batalkan</button>
+    }
+  </section>
+</div>

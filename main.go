@@ -23,6 +23,7 @@ import (
 	"nudge/modules/app_credential"
 	"nudge/modules/app_credential/app_credential_holder"
 	"nudge/modules/app_setting"
+	"nudge/modules/app_setting/app_setting_holder"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_handler"
 	"nudge/modules/auth/auth_service"
@@ -73,6 +74,7 @@ import (
 	"nudge/modules/sprint_report/sprint_report_service"
 	"nudge/modules/status_watch/status_watch_repository"
 	"nudge/modules/status_watch/status_watch_service"
+	"nudge/modules/time_report"
 	"nudge/modules/tracking_rule"
 	"nudge/modules/user_avatar/user_avatar_handler"
 	"nudge/modules/user_avatar/user_avatar_repository"
@@ -567,6 +569,13 @@ func main() {
 	MountAppSettings(router, &cfg, authSvc, app_setting.NewHandler(appSettingSvc))
 	MountAutoDone(router, &cfg, authSvc, auto_done.NewHandler(autoDoneSvc))
 	MountAppCredentials(router, &cfg, authSvc, app_credential.NewHandler(appCredentialSvc))
+	// Laporan: the user's tickets created in a date range, read again from Jira, with
+	// the raw time broken down into what is taken off, and the deviation / cascading score.
+	MountTimeReport(router, &cfg, authSvc, time_report.NewHandler(time_report.NewService(time_report.Deps{
+		Users: registrationRepo, Creds: jiraCredentialSvc, Jira: jira_client_service.NewReportClient(&cfg),
+		Boards: boardSvc, Leaves: userLeaveSvc, Sync: sprintBackfillSvc, National: holidayCalendar,
+		Cap: app_setting_holder.DeviationCapPercent, JiraBaseURL: cfg.JiraBaseURL, Lifetime: shutdownMgr.Context(),
+	})))
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,
