@@ -1,0 +1,259 @@
+<div class="page-stack rpt">
+  <!-- Filter -->
+  <section class="card rpt-filter" data-card="filter">
+    <header class="card-header">
+      <span class="card-icon"><app-icon name="report" [size]="20" /></span>
+      <div>
+        <h2>Laporan Estimasi vs Waktu Aktual</h2>
+        <p>Pilih rentang tanggal tiket dibuat. Setiap kali ditampilkan atau diunduh, waktunya dihitung ulang langsung dari Jira.</p>
+      </div>
+    </header>
+
+    <div class="rpt-controls">
+      <div class="rpt-field">
+        <span class="rpt-label">Tanggal tiket dibuat</span>
+        <app-date-range-picker data-range [from]="from()" [to]="to()" [max]="maxDay" placeholder="Pilih rentang" ariaLabel="Rentang tanggal tiket dibuat" (rangeChange)="pick($event)" />
+      </div>
+      <div class="rpt-field">
+        <span class="rpt-label">Board</span>
+        <span class="rpt-board" data-board><app-icon name="layers" [size]="14" /> {{ boardLabel() }}</span>
+      </div>
+      <div class="rpt-actions">
+        <button type="button" class="btn btn-primary" data-show [disabled]="!canRun()" (click)="run('show')">
+          <app-icon name="play" [size]="14" /> Tampilkan data
+        </button>
+        <button type="button" class="btn btn-soft" data-download [disabled]="!canRun()" (click)="run('download')">
+          <app-icon name="download" [size]="15" /> Unduh PDF
+        </button>
+      </div>
+    </div>
+    <div class="rpt-presets" role="group" aria-label="Rentang cepat">
+      @for (p of presets; track p.key) {
+        <button type="button" class="rpt-chip" [class.on]="isPreset(p.key)" [attr.data-preset]="p.key" (click)="usePreset(p.key)">{{ p.label }}</button>
+      }
+    </div>
+    <p class="rpt-hint"><app-icon name="info" [size]="14" /> Board mengikuti pilihan di kanan atas. Pilih “Semua board” untuk menggabungkan semua board kamu.</p>
+    @if (error()) {
+      <p class="msg error rpt-error" role="alert" data-error><app-icon name="alert-circle" [size]="16" /> {{ error() }}</p>
+    }
+  </section>
+
+  @if (report(); as r) {
+    @if (boardChanged()) {
+      <p class="rpt-stale" data-stale role="status">
+        <app-icon name="info" [size]="16" /> Board di kanan atas sudah berganti. Data di bawah masih untuk <strong>{{ r.boardName }}</strong>.
+        <button type="button" class="btn btn-ghost btn-sm" (click)="run('show')">Tampilkan ulang</button>
+      </p>
+    }
+
+    <!-- Summary -->
+    <section class="card rpt-summary" data-card="summary">
+      <header class="card-header">
+        <span class="card-icon"><app-icon name="target" [size]="20" /></span>
+        <div>
+          <h2>Ringkasan</h2>
+          <p>{{ r.boardName }} · tiket dibuat {{ dayLabel(r.from) }} – {{ dayLabel(r.to) }} · batas deviasi ±{{ pct(r.capPercent) }} (skor {{ pct(100 - r.capPercent) }}–{{ pct(100 + r.capPercent) }})</p>
+        </div>
+      </header>
+      @if (r.syncWarning) { <p class="rpt-note warn" data-sync-warning><app-icon name="alert-circle" [size]="14" /> {{ r.syncWarning }}</p> }
+      @if (r.truncated) { <p class="rpt-note warn" data-truncated><app-icon name="alert-circle" [size]="14" /> Rentang ini punya lebih dari 300 tiket; hanya 300 pertama yang dibaca. Persempit rentang tanggal.</p> }
+
+      <div class="rpt-tiles">
+        <div class="rpt-tile" [attr.data-tone]="achievementTone(r)" data-tile="achievement">
+          <span class="rpt-tile-label">Achievement</span>
+          <strong>{{ r.summary.scoredCount ? pct(r.summary.achievementPercent) : '–' }}</strong>
+          <small>Batas {{ pct(r.capPercent) }} ÷ deviasi total</small>
+        </div>
+        <div class="rpt-tile" [attr.data-tone]="r.summary.scoredCount ? (r.summary.within ? 'good' : 'bad') : 'muted'" data-tile="score">
+          <span class="rpt-tile-label">Skor (aktual ÷ estimasi)</span>
+          <strong>{{ r.summary.scoredCount ? pct(r.summary.scorePercent, 2) : '–' }}</strong>
+          <small>Target {{ pct(100 - r.capPercent) }}–{{ pct(100 + r.capPercent) }}</small>
+        </div>
+        <div class="rpt-tile" [attr.data-tone]="r.summary.scoredCount ? (r.summary.within ? 'good' : 'bad') : 'muted'" data-tile="deviation">
+          <span class="rpt-tile-label">Deviasi total</span>
+          <strong>{{ r.summary.scoredCount ? pct(r.summary.aggregateDeviationPercent, 2) : '–' }}</strong>
+          <small>Batas ±{{ pct(r.capPercent) }}</small>
+        </div>
+        <div class="rpt-tile" data-tone="primary" data-tile="within">
+          <span class="rpt-tile-label">Tiket sesuai target</span>
+          <strong>{{ r.summary.withinCount }}/{{ r.summary.scoredCount }}</strong>
+          <small>{{ r.summary.ticketCount }} tiket di periode ini</small>
+        </div>
+      </div>
+      <div class="rpt-tiles three">
+        <div class="rpt-tile" data-tone="plain" data-tile="estimate"><span class="rpt-tile-label">Estimasi</span><strong>{{ hm(r.summary.estimateSeconds) }}</strong><small>Story Point × 1 jam</small></div>
+        <div class="rpt-tile" data-tone="plain" data-tile="raw"><span class="rpt-tile-label">Waktu kotor</span><strong>{{ hm(r.summary.rawSeconds) }}</strong><small>Total di status yang dihitung</small></div>
+        <div class="rpt-tile" data-tone="primary" data-tile="counted"><span class="rpt-tile-label">Waktu dihitung</span><strong>{{ hm(r.summary.countedSeconds) }}</strong><small>Setelah dikurangi {{ hm(r.summary.deductedSeconds) }}</small></div>
+      </div>
+    </section>
+
+    @if (r.tickets.length) {
+      <!-- From raw to counted -->
+      <section class="card" data-card="waterfall">
+        <header class="card-header">
+          <span class="card-icon"><app-icon name="filter" [size]="20" /></span>
+          <div>
+            <h2>Dari waktu kotor ke waktu dihitung</h2>
+            <p>Waktu kotor adalah lama tiket di status yang dihitung, tanpa potongan. Setiap potongan dihitung sekali per detik.</p>
+          </div>
+        </header>
+        <ul class="rpt-fall">
+          <li class="raw" data-fall="raw">
+            <span class="rpt-fall-label">Waktu kotor</span>
+            <span class="rpt-fall-value">{{ hm(r.summary.rawSeconds) }}</span>
+            <span class="rpt-fall-bar"><span style="width: 100%"></span></span>
+            <span class="rpt-fall-pct">100%</span>
+          </li>
+          @for (d of r.deductions; track d.key; let i = $index) {
+            <li class="ded" [attr.data-fall]="d.key" [style.--i]="i">
+              <span class="rpt-fall-label">– {{ d.label }} @if (d.category === 'slot') { <em>jadwal board</em> }</span>
+              <span class="rpt-fall-value">–{{ hm(d.seconds) }}</span>
+              <span class="rpt-fall-bar"><span [class]="dedColor(d)" [style.width.%]="share(d.seconds)"></span></span>
+              <span class="rpt-fall-pct">{{ pct(share(d.seconds)) }}</span>
+            </li>
+          }
+          <li class="total" data-fall="counted">
+            <span class="rpt-fall-label">= Waktu dihitung</span>
+            <span class="rpt-fall-value">{{ hm(r.summary.countedSeconds) }}</span>
+            <span class="rpt-fall-bar"><span class="ded-total" [style.width.%]="share(r.summary.countedSeconds)"></span></span>
+            <span class="rpt-fall-pct">{{ pct(share(r.summary.countedSeconds)) }}</span>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Per ticket -->
+      <section class="card" data-card="tickets">
+        <header class="card-header">
+          <span class="card-icon"><app-icon name="kanban" [size]="20" /></span>
+          <div>
+            <h2>Per tiket</h2>
+            <p>{{ r.summary.scoredCount }} tiket dinilai · {{ r.summary.withinCount }} sesuai target. Klik tiket untuk melihat rinciannya.</p>
+          </div>
+        </header>
+        <div class="rpt-table-wrap">
+          <table class="rpt-table">
+            <thead>
+              <tr><th>Tiket</th><th class="num">Estimasi</th><th class="num">Kotor</th><th class="num">Potongan</th><th class="num">Dihitung</th><th class="num">Deviasi</th><th class="num">Skor</th><th>Hasil</th></tr>
+            </thead>
+            <tbody>
+              @for (t of r.tickets; track t.key) {
+                <tr class="rpt-row" [class.open]="isOpen(t.key)" [attr.data-ticket]="t.key" (click)="toggle(t.key)" tabindex="0" (keydown.enter)="toggle(t.key)" [attr.aria-expanded]="isOpen(t.key)">
+                  <td>
+                    <span class="rpt-key"><app-icon class="rpt-caret" name="chevron-right" [size]="14" />{{ t.key }}</span>
+                    <span class="rpt-title">{{ t.summary }}</span>
+                  </td>
+                  <td class="num">{{ hm(t.estimateSeconds) }}</td>
+                  <td class="num">{{ hm(t.rawSeconds) }}</td>
+                  <td class="num muted">–{{ hm(t.deductedSeconds) }}</td>
+                  <td class="num strong">{{ hm(t.countedSeconds) }}</td>
+                  <td class="num" [class.good]="t.within" [class.bad]="!t.within">{{ pct(t.deviationPercent) }}</td>
+                  <td class="num" [class.good]="t.within" [class.bad]="!t.within">{{ pct(t.scorePercent) }}</td>
+                  <td><span class="rpt-badge" [class.good]="t.within" [class.bad]="!t.within">{{ t.within ? 'Sesuai' : 'Di luar' }}</span></td>
+                </tr>
+                @if (isOpen(t.key)) {
+                  <tr class="rpt-detail-row" [attr.data-detail]="t.key">
+                    <td colspan="8">
+                      <div class="rpt-detail">
+                        <p class="rpt-facts">
+                          <a [href]="t.url" target="_blank" rel="noopener">Buka di Jira <app-icon name="external" [size]="12" /></a>
+                          <span>{{ t.type }}</span><span>Status {{ t.status }}</span>
+                          @if (t.created) { <span>Dibuat {{ dayLabel(t.created) }}</span> }
+                          @if (t.sprints.length) { <span>Sprint {{ t.sprints.join(', ') }}</span> }
+                          @if (t.running) { <span class="live">masih berjalan</span> }
+                        </p>
+                        <div class="rpt-detail-grid">
+                          <dl class="rpt-break">
+                            @for (s of t.statusTimes; track s.status) {
+                              <div><dt>Waktu kotor di {{ s.status }}</dt><dd>{{ hm(s.rawSeconds) }}</dd></div>
+                            }
+                            @if (t.statusTimes.length > 1) { <div class="strong"><dt>Waktu kotor</dt><dd>{{ hm(t.rawSeconds) }}</dd></div> }
+                            @for (d of t.deductions; track d.key) {
+                              <div class="ded"><dt><i [class]="dedColor(d)"></i>– {{ d.label }}</dt><dd>–{{ hm(d.seconds) }}</dd></div>
+                            }
+                            <div class="total"><dt>= Waktu dihitung</dt><dd>{{ hm(t.countedSeconds) }}</dd></div>
+                          </dl>
+                          <dl class="rpt-compare">
+                            <div><dt>Estimasi</dt><dd>{{ hm(t.estimateSeconds) }} ({{ t.storyPoints }} SP)</dd></div>
+                            <div><dt>Waktu dihitung</dt><dd>{{ hm(t.countedSeconds) }}</dd></div>
+                            <div><dt>Selisih</dt><dd>{{ signedHm(t.countedSeconds - t.estimateSeconds) }}</dd></div>
+                            <div [class.good]="t.within" [class.bad]="!t.within"><dt>Deviasi</dt><dd>{{ pct(t.deviationPercent, 2) }}</dd></div>
+                            <div [class.good]="t.within" [class.bad]="!t.within"><dt>Skor</dt><dd>{{ pct(t.scorePercent, 2) }}</dd></div>
+                          </dl>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                <td class="num">{{ hm(r.summary.estimateSeconds) }}</td>
+                <td class="num">{{ hm(r.summary.rawSeconds) }}</td>
+                <td class="num">–{{ hm(r.summary.deductedSeconds) }}</td>
+                <td class="num">{{ hm(r.summary.countedSeconds) }}</td>
+                <td class="num">{{ pct(r.summary.aggregateDeviationPercent) }}</td>
+                <td class="num">{{ pct(r.summary.scorePercent) }}</td>
+                <td><span class="rpt-badge" [class.good]="r.summary.within" [class.bad]="!r.summary.within">{{ r.summary.within ? 'Sesuai' : 'Di luar' }}</span></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+    } @else {
+      <section class="card" data-card="empty">
+        <div class="empty-state">
+          <div class="empty-icon"><app-icon name="report" [size]="24" /></div>
+          <p data-empty>Belum ada tiket yang bisa dinilai pada periode ini.</p>
+        </div>
+      </section>
+    }
+
+    @if (r.excluded.length) {
+      <section class="card" data-card="excluded">
+        <header class="card-header">
+          <span class="card-icon"><app-icon name="alert-circle" [size]="20" /></span>
+          <div>
+            <h2>Tidak dinilai</h2>
+            <p>Tiket di periode ini yang tidak ikut skor, beserta alasannya.</p>
+          </div>
+        </header>
+        <ul class="rpt-excluded">
+          @for (e of r.excluded; track e.key) {
+            <li [attr.data-excluded]="e.key">
+              <a [href]="e.url" target="_blank" rel="noopener">{{ e.key }}</a>
+              <span class="rpt-title">{{ e.summary }}</span>
+              <small>{{ e.reason }}@if (e.countedSeconds > 0) { · waktu dihitung {{ hm(e.countedSeconds) }} }</small>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
+    <section class="card" data-card="method">
+      <header class="card-header">
+        <span class="card-icon"><app-icon name="info" [size]="20" /></span>
+        <div><h2>Cara membaca</h2><p>Aturan yang dipakai laporan ini.</p></div>
+      </header>
+      <ul class="rpt-notes">
+        <li><strong>Waktu kotor</strong> = lama tiket di status yang dihitung ({{ statusList(r) }}), dari riwayat status Jira. Tiket yang masih di status itu dihitung sampai laporan dibuat.</li>
+        <li>Jam kerja 08.30–17.30 WIB Senin–Jumat, istirahat 12.00–13.00. Akhir pekan, libur nasional, dan cuti tidak dihitung sepanjang harinya.</li>
+        <li>Jadwal board (Daily Stand Up dan kegiatan khusus) tidak dihitung pada jam dan harinya.</li>
+        <li><strong>Skor</strong> = waktu dihitung ÷ estimasi × 100%. <strong>Deviasi</strong> = selisihnya ÷ estimasi. Sesuai target bila deviasi ≤ {{ pct(r.capPercent) }}. <strong>Achievement</strong> = 100% bila deviasi total ≤ {{ pct(r.capPercent) }}, selain itu batas ÷ deviasi total × 100%.</li>
+      </ul>
+      <p class="rpt-generated">Dibuat {{ dayLabel(r.generatedAt) }} untuk {{ r.userName }}.</p>
+    </section>
+  } @else if (!progress()) {
+    <section class="card rpt-intro" data-card="intro">
+      <div class="empty-state">
+        <div class="empty-icon"><app-icon name="report" [size]="24" /></div>
+        <p>Pilih rentang tanggal, lalu tekan <strong>Tampilkan data</strong> atau <strong>Unduh PDF</strong>.</p>
+      </div>
+    </section>
+  }
+</div>
+
+@if (progress(); as p) {
+  <app-report-progress [progress]="p" [mode]="mode()" (cancel)="cancel()" />
+}

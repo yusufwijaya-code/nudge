@@ -7,6 +7,7 @@ import (
 	"nudge/modules/auto_done"
 	"nudge/modules/onboarding"
 	"nudge/modules/signup"
+	"nudge/modules/time_report"
 
 	"github.com/gin-gonic/gin"
 
@@ -242,4 +243,11 @@ func MountAppCredentials(r *gin.Engine, cfg *config.AppConfig, authSvc auth_serv
 	admin := r.Group(cfg.BasePath + "/api/dashboard/admin")
 	admin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg), auth_middleware.AdminMiddleware(cfg))
 	app_credential.AdminRoutes(admin, h)
+}
+
+// MountTimeReport mounts the user's Laporan (session user only).
+func MountTimeReport(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *time_report.Handler) {
+	api := r.Group(cfg.BasePath + "/api/dashboard")
+	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
+	time_report.Routes(api, h)
 }

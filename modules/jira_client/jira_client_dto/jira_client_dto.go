@@ -30,6 +30,8 @@ type IssueFields struct {
 	// greenhopper string format that was never actually observed live but
 	// costs nothing to handle defensively.
 	SprintRaw json.RawMessage `json:"customfield_10020"`
+	// Created is when the ticket was made (only requested by the Laporan search).
+	Created string `json:"created,omitempty"`
 	// Numbers holds every numeric custom field of the response by ID
 	// (null ones are left out). Story Points live here — which field
 	// depends on the project's tracking rule (Tech Spec "Aturan Board");
@@ -101,6 +103,22 @@ type SprintRef struct {
 // board that sprint belongs to is the ticket's board (Tech Spec "Per-Board
 // Settings & Active Sprint Dashboard"). Unlike ActiveSprintName there is no
 // fallback to a closed sprint: no active sprint means no board.
+// Sprints is every sprint on the ticket's Sprint field (closed, active, future).
+func (f IssueFields) Sprints() []SprintRef {
+	if len(f.SprintRaw) == 0 || string(f.SprintRaw) == "null" {
+		return nil
+	}
+	var sprints []sprintObject
+	if err := json.Unmarshal(f.SprintRaw, &sprints); err != nil {
+		return nil
+	}
+	out := make([]SprintRef, 0, len(sprints))
+	for _, s := range sprints {
+		out = append(out, SprintRef(s))
+	}
+	return out
+}
+
 func (f IssueFields) ActiveSprint() (SprintRef, bool) {
 	if len(f.SprintRaw) == 0 || string(f.SprintRaw) == "null" {
 		return SprintRef{}, false

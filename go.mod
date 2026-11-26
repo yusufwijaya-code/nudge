@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/gin-gonic/gin v1.12.0
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/spf13/viper v1.21.0
 	golang.org/x/oauth2 v0.37.0

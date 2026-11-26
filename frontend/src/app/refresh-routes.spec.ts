@@ -17,7 +17,7 @@ function stubbed(list: typeof routes): typeof routes {
   });
 }
 
-const DASHBOARD = ['/onboarding', '/dashboard', '/dashboard/board', '/dashboard/leave', '/dashboard/calendar', '/dashboard/settings'];
+const DASHBOARD = ['/onboarding', '/dashboard', '/dashboard/report', '/dashboard/board', '/dashboard/leave', '/dashboard/calendar', '/dashboard/settings'];
 const ADMIN = ['/admin', '/admin/users', '/admin/users/8', '/admin/broadcast', '/admin/chat-logs', '/admin/app-settings', '/admin/tracking-rules', '/admin/tracking-rules/new', '/admin/tracking-rules/CORE'];
 
 /**
