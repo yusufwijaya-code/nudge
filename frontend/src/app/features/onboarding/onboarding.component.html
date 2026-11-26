@@ -1,0 +1,138 @@
+<div class="ob">
+  <header class="ob-top">
+    <span class="ob-brand"><img src="favicon.svg" alt="" width="28" height="28" /> Nudge</span>
+    <a class="ob-logout" [href]="logoutHref">Keluar</a>
+  </header>
+
+  <main class="ob-main">
+    <ol class="ob-steps" aria-label="Langkah">
+      <li class="done"><span class="ob-dot"><app-icon name="check" [size]="12" /></span> Daftar</li>
+      <li class="active"><span class="ob-dot">2</span> Atur board</li>
+    </ol>
+
+    <h1>Atur board kamu</h1>
+    <p class="ob-lead">
+      Board Jira kamu belum terdaftar di Nudge. Pilih status yang dihitung dan field Story Point-nya, lalu simpan. Nudge langsung menyinkronkan tiketmu dari Jira.
+    </p>
+
+    @if (loading()) {
+      <div class="ob-card ob-skeleton" aria-busy="true" data-loading>
+        <span class="sk sk-1"></span><span class="sk sk-2"></span><span class="sk sk-3"></span>
+      </div>
+    } @else if (loadError()) {
+      <div class="alert alert-error" role="alert" data-load-error>
+        <app-icon name="alert-circle" [size]="18" /> <span>{{ loadError() }}</span>
+      </div>
+    } @else {
+      @if (pending().length > 1) {
+        <div class="ob-boards" role="tablist" aria-label="Board yang belum diatur" data-board-tabs>
+          @for (b of pending(); track b.boardId) {
+            <button type="button" role="tab" class="ob-board" [class.on]="current()?.boardId === b.boardId" [attr.aria-selected]="current()?.boardId === b.boardId" [attr.data-board]="b.boardId" [disabled]="saving()" (click)="choose(b)">
+              <app-board-avatar [boardId]="b.boardId" [projectKey]="b.projectKey" [size]="28" />
+              <span><strong>{{ b.name }}</strong><small>{{ b.ticketCount }} tiketmu di {{ b.sprintName }}</small></span>
+            </button>
+          }
+        </div>
+      }
+      @if (registeredCount() > 0) {
+        <p class="ob-note" data-registered-note><app-icon name="check-circle" [size]="14" /> {{ registeredCount() }} board kamu yang lain sudah terdaftar.</p>
+      }
+
+      @if (form(); as f) {
+        <section class="ob-card" data-project>
+          <div class="ob-project">
+            <app-board-avatar [boardId]="f.board.boardId" [projectKey]="f.board.projectKey" [size]="40" />
+            <div>
+              <strong>{{ f.board.name }}</strong>
+              <small>{{ f.projectName || f.board.projectKey }} · {{ f.board.projectKey }} · {{ f.board.ticketCount }} tiketmu di {{ f.board.sprintName }}</small>
+            </div>
+          </div>
+          @if (f.templateProject) {
+            <p class="ob-hint" data-template><app-icon name="info" [size]="14" /> Isian awal disalin dari board {{ f.templateProject }}. Sesuaikan kalau berbeda.</p>
+          } @else {
+            <p class="ob-hint" data-no-template><app-icon name="info" [size]="14" /> Belum ada board yang mirip, jadi isi semuanya sendiri.</p>
+          }
+        </section>
+
+        <section class="ob-card" data-section="statuses">
+          <h2>Status</h2>
+          <p class="ob-help">Waktu tiket dihitung selama berada di status yang dipilih. Pindah ke status selesai berarti selesai.</p>
+          <span class="ob-label">Status yang dihitung <em>bisa lebih dari satu</em></span>
+          <div class="ob-chips" role="group" aria-label="Status yang dihitung">
+            @for (s of statuses(); track s) {
+              <button type="button" class="ob-chip" [class.on]="isTracked(s)" [attr.aria-pressed]="isTracked(s)" [attr.data-status]="s" (click)="toggleTracked(s)">
+                @if (isTracked(s)) { <app-icon name="check" [size]="12" /> }
+                {{ s }}
+              </button>
+            }
+          </div>
+          @if (fieldErrors().trackedStatuses) { <p class="ob-err">{{ fieldErrors().trackedStatuses }}</p> }
+
+          <div class="ob-row">
+            <div class="ob-field">
+              <span class="ob-label">Status selesai</span>
+              <app-select data-done [options]="doneOptions()" [ngModel]="done()" [ngModelOptions]="{ standalone: true }" (ngModelChange)="done.set($event)" ariaLabel="Status selesai" />
+              @if (fieldErrors().doneStatus) { <p class="ob-err">{{ fieldErrors().doneStatus }}</p> }
+            </div>
+            <div class="ob-field">
+              <span class="ob-label">Status review <em>opsional</em></span>
+              <app-select data-review [options]="reviewOptions()" [ngModel]="review()" [ngModelOptions]="{ standalone: true }" (ngModelChange)="review.set($event)" ariaLabel="Status review" />
+              @if (fieldErrors().reviewStatus) { <p class="ob-err">{{ fieldErrors().reviewStatus }}</p> }
+            </div>
+          </div>
+        </section>
+
+        <section class="ob-card" data-section="points">
+          <h2>Field Story Point</h2>
+          <p class="ob-help">Budget waktu dibaca dari field yang dipilih; field pertama yang terisi di tiket yang dipakai.</p>
+          <div class="ob-chips" role="group" aria-label="Field Story Point">
+            @for (nf of numberFields(); track nf.id) {
+              <button type="button" class="ob-chip" [class.on]="hasField(nf.id)" [attr.aria-pressed]="hasField(nf.id)" [attr.data-field]="nf.id" (click)="toggleField(nf.id)">
+                @if (hasField(nf.id)) { <app-icon name="check" [size]="12" /> }
+                {{ nf.name }}
+              </button>
+            } @empty {
+              <p class="ob-err" data-no-fields>Project ini tidak punya field angka di Jira.</p>
+            }
+          </div>
+          @if (fieldErrors().storyPointFields) { <p class="ob-err">{{ fieldErrors().storyPointFields }}</p> }
+
+          <div class="ob-row">
+            <div class="ob-field">
+              <span class="ob-label">Field SP untuk card biasa</span>
+              <app-select data-write [options]="writeOptions()" [ngModel]="writeField()" [ngModelOptions]="{ standalone: true }" (ngModelChange)="writeField.set($event)" ariaLabel="Field SP card biasa" />
+              @if (fieldErrors().storyPointWriteField) { <p class="ob-err">{{ fieldErrors().storyPointWriteField }}</p> }
+            </div>
+            <div class="ob-field">
+              <span class="ob-label">Field SP untuk subtask</span>
+              <app-select data-write-subtask [options]="writeOptions()" [ngModel]="writeFieldSubtask()" [ngModelOptions]="{ standalone: true }" (ngModelChange)="writeFieldSubtask.set($event)" ariaLabel="Field SP subtask" />
+              @if (fieldErrors().storyPointWriteFieldSubtask) { <p class="ob-err">{{ fieldErrors().storyPointWriteFieldSubtask }}</p> }
+            </div>
+          </div>
+        </section>
+
+        @if (saveError()) {
+          <div class="alert alert-error" role="alert" data-save-error>
+            <app-icon name="alert-circle" [size]="18" /> <span>{{ saveError() }}</span>
+          </div>
+        }
+
+        <div class="ob-actions">
+          <button type="button" class="btn btn-primary" data-save [class.loading]="saving()" [disabled]="!canSave()" (click)="save()">
+            <span class="spinner" aria-hidden="true"></span>
+            <span class="btn-label"><app-icon name="check" [size]="16" /> Simpan &amp; sinkron Jira</span>
+          </button>
+          @if (syncing()) {
+            <small class="ob-sync" data-syncing>Menyimpan dan menyinkronkan tiketmu dari Jira, tunggu sebentar…</small>
+          } @else if (!canSave() && !saving()) {
+            <small class="ob-sync" data-why>Lengkapi status dan field Story Point dulu.</small>
+          }
+        </div>
+      } @else if (formLoading()) {
+        <div class="ob-card ob-skeleton" aria-busy="true" data-form-loading>
+          <span class="sk sk-1"></span><span class="sk sk-2"></span><span class="sk sk-3"></span>
+        </div>
+      }
+    }
+  </main>
+</div>

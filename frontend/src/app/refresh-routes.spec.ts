@@ -17,7 +17,7 @@ function stubbed(list: typeof routes): typeof routes {
   });
 }
 
-const DASHBOARD = ['/dashboard', '/dashboard/board', '/dashboard/leave', '/dashboard/calendar', '/dashboard/settings'];
+const DASHBOARD = ['/onboarding', '/dashboard', '/dashboard/board', '/dashboard/leave', '/dashboard/calendar', '/dashboard/settings'];
 const ADMIN = ['/admin', '/admin/users', '/admin/users/8', '/admin/broadcast', '/admin/chat-logs', '/admin/jira-account', '/admin/tracking-rules', '/admin/tracking-rules/new', '/admin/tracking-rules/CORE'];
 
 /**
@@ -33,7 +33,8 @@ describe('refreshing on a page', () => {
     const done = router.navigateByUrl(url).then(() => router.url);
     // Every guard that needs the session asks /api/auth/me.
     queueMicrotask(() => {
-      for (const req of http.match((r) => r.url.endsWith('/api/auth/me'))) {
+      for (const req of http.match((r) => r.url.endsWith("/api/auth/me"))) {
+        if (req.cancelled) continue;
         if (me.status === 200) req.flush(me.body as object);
         else req.flush({}, { status: me.status, statusText: 'x' });
       }
@@ -57,6 +58,9 @@ describe('refreshing on a page', () => {
       expect(await refreshOn(url, { status: 200, body: { email: 'a@esb.co.id', isAdmin: false } })).toBe('/dashboard');
     });
   }
+  it('keeps the registration page for a visitor with no session yet', async () => {
+    expect(await refreshOn('/register', { status: 401 })).toBe('/register');
+  });
   it('sends a signed-out visitor to the login page', async () => {
     expect(await refreshOn('/admin/users', { status: 401 })).toBe('/');
     expect(await refreshOn('/dashboard/board', { status: 401 })).toBe('/');

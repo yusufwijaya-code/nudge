@@ -55,6 +55,7 @@ import (
 	"nudge/modules/jira_credential/jira_credential_repository"
 	"nudge/modules/jira_credential/jira_credential_service"
 	"nudge/modules/move_fields"
+	"nudge/modules/onboarding"
 	"nudge/modules/poller/poller_service"
 	"nudge/modules/registration/registration_dto"
 	"nudge/modules/registration/registration_repository"
@@ -62,6 +63,7 @@ import (
 	"nudge/modules/reminder_engine/reminder_engine_service"
 	"nudge/modules/reminder_log/reminder_log_repository"
 	"nudge/modules/reminder_log/reminder_log_service"
+	"nudge/modules/signup"
 	"nudge/modules/sprint_backfill/sprint_backfill_service"
 	"nudge/modules/sprint_report/sprint_report_handler"
 	"nudge/modules/sprint_report/sprint_report_service"
@@ -412,28 +414,37 @@ func main() {
 	// Auto Join Google Group (Tech Spec "Auto Join Google Group Nudge"): off
 	// unless NUDGE_GROUP_EMAIL and the operator's Groups token are set.
 	var chatGroupSvc *chat_group.Service
+	var chatGroupClient *chat_group.Client
 	if ts, on, err := chat_group.TokenSource(&cfg); err != nil {
 		log.Printf("main: Groups token unreadable, auto join off: %v", err)
 	} else if on {
-		chatGroupSvc = chat_group.NewService(chat_group.NewClient(ts, cfg.NudgeGroupEmail, chat_group.DefaultBaseURL), chat_group.NewRepository(db))
+		chatGroupClient = chat_group.NewClient(ts, cfg.NudgeGroupEmail, chat_group.DefaultBaseURL)
+		chatGroupSvc = chat_group.NewService(chatGroupClient, chat_group.NewRepository(db))
 		log.Printf("main: auto join Google Group %s on", cfg.NudgeGroupEmail)
 	}
-	authHandler := auth_handler.NewAuthHandler(authSvc, &cfg, auth_handler.WithLoginHook(
-		func(ctx context.Context, userID int64, claims auth_dto.GoogleClaims) {
-			if err := userAvatarSvc.SavePicture(ctx, userID, claims.Picture); err != nil {
-				log.Printf("main: saving profile picture of user %d failed: %v", userID, err)
-			}
-			// Never delays or fails the login: runs on its own after the redirect.
-			if chatGroupSvc != nil {
-				email := claims.Email
-				go func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-					defer cancel()
-					chatGroupSvc.EnsureMember(ctx, email)
-				}()
-			}
-		},
-	))
+	loginHook := func(ctx context.Context, userID int64, claims auth_dto.GoogleClaims) {
+		if err := userAvatarSvc.SavePicture(ctx, userID, claims.Picture); err != nil {
+			log.Printf("main: saving profile picture of user %d failed: %v", userID, err)
+		}
+		// Never delays or fails the login: runs on its own after the redirect.
+		if chatGroupSvc != nil {
+			email := claims.Email
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				chatGroupSvc.EnsureMember(ctx, email)
+			}()
+		}
+	}
+	// Login and registration are separate: a Google identity with no account goes
+	// to /register, and the account is created only after the Google Group accepted it.
+	signupDeps := signup.Deps{Directory: registrationRepo, Jira: jiraClientSvc, Registrar: registrationService}
+	if chatGroupClient != nil {
+		signupDeps.Group = chatGroupClient
+		signupDeps.Store = chat_group.NewRepository(db)
+	}
+	signupHandler := signup.NewHandler(signup.NewService(signupDeps), signup.NewTokens(cfg.CredentialEncryptionKey), authSvc, cfg.BasePath, cfg.AdminEmail, loginHook)
+	authHandler := auth_handler.NewAuthHandler(authSvc, &cfg, auth_handler.WithLoginHook(loginHook), auth_handler.WithSignupGate(signupHandler))
 	if chatGroupSvc != nil {
 		shutdownMgr.AddWorker()
 		go func() {
@@ -515,6 +526,12 @@ func main() {
 	MountIssueCreate(router, &cfg, authSvc, issue_create_handler.New(issueCreateSvc, cfg.JiraBaseURL))
 	MountChatLog(router, &cfg, authSvc, chat_log_handler.New(chatLogRepo, deliveryRouter, registrationRepo))
 	MountTrackingRules(router, &cfg, authSvc, tracking_rule.NewHandler(trackingRuleSvc))
+	MountSignup(router, &cfg, signupHandler)
+	// Step 2 of joining: the user's boards, registered or not, and the setup of a new one.
+	MountOnboarding(router, &cfg, authSvc, onboarding.NewHandler(onboarding.NewService(onboarding.Deps{
+		Users: registrationRepo, Creds: jiraCredentialSvc, Discover: jira_client_service.NewBoardDiscoveryClient(&cfg),
+		Boards: boardSvc, Rules: trackingRuleSvc, Sync: sprintBackfillSvc,
+	})))
 	MountJiraAccount(router, &cfg, authSvc, jira_account.NewHandler(jiraAccountSvc))
 
 	srv := &http.Server{

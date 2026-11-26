@@ -41,6 +41,30 @@ type authHandlerImpl struct {
 	// onLogin runs after a successful sign-in (e.g. to store the Google
 	// profile picture); nil = nothing.
 	onLogin LoginHook
+	// signup, when set, sends a verified visitor with no account to the
+	// registration page instead of creating the account on the spot.
+	signup SignupGate
+}
+
+// SignupGate separates "Masuk" from "Daftar": a Google identity with no account
+// goes to the registration page and is created only once registration passes.
+type SignupGate interface {
+	// IsNew reports whether email has no account yet.
+	IsNew(ctx context.Context, email string) (bool, error)
+	// Begin remembers the verified Google identity (a short-lived signed cookie)
+	// and returns the app path of the registration page.
+	Begin(c *gin.Context, claims auth_dto.GoogleClaims) string
+}
+
+// WithSignupGate turns off auto-registration at login: see SignupGate.
+func WithSignupGate(g SignupGate) Option {
+	return func(h *authHandlerImpl) { h.signup = g }
+}
+
+// SetSessionCookie stores the session token the way a login does.
+func SetSessionCookie(c *gin.Context, basePath, token string) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie(sessionCookieName, token, sessionCookieMaxAge, basePath, "", true, true)
 }
 
 // LoginHook is told about every successful sign-in. It must not block for
@@ -127,6 +151,19 @@ func (h *authHandlerImpl) Callback(c *gin.Context) {
 		return
 	}
 
+	if h.signup != nil {
+		isNew, err := h.signup.IsNew(ctx, claims.Email)
+		if err != nil {
+			log.Printf("auth_handler: checking whether %s has an account failed: %v", claims.Email, err)
+			h.redirectToLoginWithError(c, "Gagal memproses akun, coba lagi")
+			return
+		}
+		if isNew {
+			c.Redirect(http.StatusFound, h.appURL+h.signup.Begin(c, *claims))
+			return
+		}
+	}
+
 	user, err := h.authService.GetOrCreateUser(ctx, claims.Email, claims.Name)
 	if err != nil {
 		switch {
@@ -152,8 +189,7 @@ func (h *authHandlerImpl) Callback(c *gin.Context) {
 		h.onLogin(ctx, user.UserID, *claims)
 	}
 
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie(sessionCookieName, token, sessionCookieMaxAge, h.cookiePath(), "", true, true)
+	SetSessionCookie(c, h.cookiePath(), token)
 	c.Redirect(http.StatusFound, h.appURL+"/dashboard")
 }
 

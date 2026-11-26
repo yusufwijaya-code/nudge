@@ -115,5 +115,18 @@ export const routes: Routes = [
       },
     ],
   },
+  // Pendaftaran: a Google identity with no account lands here (no session yet).
+  {
+    path: 'register',
+    loadComponent: () => import('./features/register/register.component').then((m) => m.RegisterComponent),
+    title: 'Daftar · Nudge',
+  },
+  // Langkah 2: set up the user's boards that have no Aturan Board yet.
+  {
+    path: 'onboarding',
+    loadComponent: () => import('./features/onboarding/onboarding.component').then((m) => m.OnboardingComponent),
+    canActivate: [AuthGuard],
+    title: 'Atur Board · Nudge',
+  },
   { path: '**', redirectTo: '' },
 ];

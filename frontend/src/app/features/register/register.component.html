@@ -1,0 +1,63 @@
+<div class="login-page">
+  <section class="login-hero" aria-hidden="true">
+    <div class="hero-glow"></div>
+    <div class="hero-content">
+      <div class="hero-brand">
+        <img src="favicon.svg" alt="" width="44" height="44" />
+        <span>Nudge</span>
+      </div>
+      <h2>Satu langkah lagi,<br />lalu kamu siap.</h2>
+      <p>Daftar dulu supaya app Nudge muncul di Google Chat kamu, lalu atur board Jira-mu.</p>
+      <ul class="hero-points">
+        <li><app-icon name="users" [size]="18" /> Gabung Google Group Nudge otomatis</li>
+        <li><app-icon name="layers" [size]="18" /> Atur board sekali, langsung tersinkron dengan Jira</li>
+        <li><app-icon name="lock" [size]="18" /> Data hanya milik akunmu sendiri</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="login-panel">
+    <div class="login-card reg-card">
+      <img class="login-logo" src="favicon.svg" alt="Nudge" width="56" height="56" />
+
+      @if (loading()) {
+        <h1>Menyiapkan pendaftaran…</h1>
+        <p class="subtitle"><span class="spinner reg-spin" aria-hidden="true"></span></p>
+      } @else if (expired()) {
+        <h1>Sesi pendaftaran berakhir</h1>
+        <p class="subtitle" data-expired>Masuk lagi dengan Google untuk melanjutkan pendaftaran.</p>
+        <a class="btn btn-primary reg-btn" href="/" data-relogin>Kembali ke halaman masuk</a>
+      } @else if (me()) {
+        <h1>Daftar ke Nudge</h1>
+        <p class="subtitle" data-who>Belum ada akun Nudge untuk <strong>{{ me()!.email }}</strong>. Daftar sekarang, hanya butuh beberapa detik.</p>
+
+        <ol class="reg-steps" aria-label="Langkah pendaftaran">
+          <li class="done"><span class="reg-dot"><app-icon name="check" [size]="12" /></span> Masuk dengan Google</li>
+          <li [class.active]="submitting()"><span class="reg-dot">2</span> Gabung Google Group Nudge</li>
+          <li><span class="reg-dot">3</span> Buat akun</li>
+          <li><span class="reg-dot">4</span> Atur board Jira</li>
+        </ol>
+
+        @if (error(); as e) {
+          <div class="alert alert-error reg-alert" role="alert" data-error>
+            <app-icon name="alert-circle" [size]="18" />
+            <div>
+              <span data-error-message>{{ e.message }}</span>
+              @if (e.adminEmail) {
+                <a class="reg-chat" data-chat-admin [href]="chatAdminUrl(e.adminEmail)" target="_blank" rel="noopener">
+                  <app-icon name="send" [size]="14" /> Chat admin ({{ e.adminEmail }})
+                </a>
+              }
+            </div>
+          </div>
+        }
+
+        <button type="button" class="btn btn-primary reg-btn" data-register [class.loading]="submitting()" [disabled]="submitting()" (click)="register()">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn-label">{{ error() ? 'Coba lagi' : 'Daftar sekarang' }}</span>
+        </button>
+        <p class="footer-note"><app-icon name="shield-check" [size]="14" /> Akun baru dibuat setelah kamu masuk ke Google Group Nudge</p>
+      }
+    </div>
+  </section>
+</div>
