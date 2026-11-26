@@ -1,0 +1,58 @@
+<div class="page-stack">
+  <section class="card as-card" data-card="deviation">
+    <header class="card-header">
+      <span class="card-icon"><app-icon name="target" [size]="20" /></span>
+      <div>
+        <h2>Deviasi</h2>
+        <p>Selisih waktu aktual dari estimasi (SP) yang masih dianggap sesuai target.</p>
+      </div>
+    </header>
+
+    @if (loadError()) {
+      <p class="msg error as-pad" data-load-error>
+        <app-icon name="alert-circle" [size]="16" /> Gagal memuat pengaturan.
+        <button type="button" class="btn btn-ghost btn-sm" (click)="load()">Coba lagi</button>
+      </p>
+    } @else if (!settings()) {
+      <div class="as-skeleton skeleton" aria-busy="true"></div>
+    } @else {
+      <div class="as-row">
+        <div class="as-field">
+          <label for="deviation-input">Batas deviasi</label>
+          <div class="as-input">
+            <input id="deviation-input" data-deviation type="text" inputmode="decimal" autocomplete="off" maxlength="6"
+              [ngModel]="input()" (ngModelChange)="input.set($event)" (keydown.enter)="save()" aria-describedby="deviation-help" />
+            <span class="as-unit" aria-hidden="true">%</span>
+          </div>
+        </div>
+        <button type="button" class="btn btn-primary" data-save [class.loading]="saving()" [disabled]="!canSave()" (click)="save()">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn-label"><app-icon name="check" [size]="16" /> Simpan</span>
+        </button>
+        @if (settings()!.deviationCapPercent !== settings()!.defaultPercent || (valid() && value() !== settings()!.defaultPercent)) {
+          <button type="button" class="btn btn-ghost" data-default (click)="useDefault()">Pakai default ({{ settings()!.defaultPercent }}%)</button>
+        }
+      </div>
+      @if (input().trim() !== '' && !valid()) {
+        <p class="as-err" data-invalid>Isi angka antara {{ min }} dan {{ max }}.</p>
+      }
+      @if (error()) {
+        <p class="as-err" data-error>{{ error() }}</p>
+      }
+      <p class="as-help" id="deviation-help" data-example>
+        <app-icon name="info" [size]="14" /> {{ example() }}
+      </p>
+      <ul class="as-notes">
+        <li>Deviasi tiket = selisih waktu aktual dan estimasi, dibagi estimasi. Lebih cepat atau lebih lambat dihitung sama.</li>
+        <li>Di Ringkasan sprint, tiket dengan deviasi di atas batas dihitung melenceng.</li>
+        <li><strong>Achievement sprint</strong> = 100% kalau deviasi total tidak melewati batas. Kalau lewat, nilainya batas ÷ deviasi total × 100%.</li>
+        <li>Berlaku langsung untuk semua user. Default {{ settings()!.defaultPercent }}%.</li>
+      </ul>
+      @if (settings()!.updatedBy) {
+        <p class="as-meta" data-updated>Terakhir diubah oleh <strong>{{ settings()!.updatedBy }}</strong>@if (settings()!.updatedDate) { · {{ settings()!.updatedDate | date: 'd MMM y, HH:mm' }} }</p>
+      }
+    }
+  </section>
+
+  <app-jira-account />
+</div>

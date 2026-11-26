@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"nudge/modules/app_setting"
 	"nudge/modules/onboarding"
 	"nudge/modules/signup"
 
@@ -218,4 +219,11 @@ func MountOnboarding(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.
 	api := r.Group(cfg.BasePath + "/api")
 	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
 	onboarding.Routes(api, h)
+}
+
+// MountAppSettings mounts Admin › Pengaturan Aplikasi (admin only).
+func MountAppSettings(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *app_setting.Handler) {
+	admin := r.Group(cfg.BasePath + "/api/dashboard/admin")
+	admin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg), auth_middleware.AdminMiddleware(cfg))
+	app_setting.AdminRoutes(admin, h)
 }

@@ -20,6 +20,7 @@ import (
 	"nudge/modules/admin_dashboard/admin_dashboard_service"
 	"nudge/modules/admin_roster"
 	"nudge/modules/admin_roster/admin_roster_holder"
+	"nudge/modules/app_setting"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_handler"
 	"nudge/modules/auth/auth_service"
@@ -187,6 +188,11 @@ func main() {
 
 	// Admin › Akun Jira: an account an admin saved replaces the env pair for
 	// every Jira call, from the first request on.
+	// Admin › Pengaturan Aplikasi: the deviation cap (default 12%).
+	appSettingSvc := app_setting.NewService(app_setting.NewRepository(db))
+	if err := appSettingSvc.Load(context.Background()); err != nil {
+		log.Printf("main: loading the application settings failed, defaults apply: %v", err)
+	}
 	jiraAccountSvc := jira_account.NewService(&cfg, jira_account.NewRepository(db), jira_account.NewChecker(cfg.JiraBaseURL))
 	if err := jiraAccountSvc.Load(context.Background()); err != nil {
 		log.Fatalf("failed to load the Jira account: %v", err)
@@ -533,6 +539,7 @@ func main() {
 		Boards: boardSvc, Rules: trackingRuleSvc, Sync: sprintBackfillSvc,
 	})))
 	MountJiraAccount(router, &cfg, authSvc, jira_account.NewHandler(jiraAccountSvc))
+	MountAppSettings(router, &cfg, authSvc, app_setting.NewHandler(appSettingSvc))
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

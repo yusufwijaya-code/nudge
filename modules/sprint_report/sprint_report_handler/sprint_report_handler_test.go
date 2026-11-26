@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"nudge/modules/app_setting/app_setting_holder"
 	"strings"
 	"testing"
 
@@ -186,5 +187,25 @@ func TestBackfill_ErrorsAndMissingBackfiller(t *testing.T) {
 	NewSprintReportHandler(&fakeSprintReportService{}).Backfill(c)
 	if w.Code != http.StatusNotImplemented {
 		t.Errorf("no backfiller status = %d, want 501", w.Code)
+	}
+}
+
+// The cap an admin sets in Pengaturan Aplikasi drives the report: the default of
+// a report without ?cap=, and what the page shows as the target.
+func TestGetReport_UsesTheCapSetByAnAdmin(t *testing.T) {
+	defer app_setting_holder.SetDeviationCapPercent(0)
+	app_setting_holder.SetDeviationCapPercent(20)
+	svc := &fakeSprintReportService{availableSprints: []string{"Sprint 42"}, report: sprint_report_dto.Report{}}
+	w, c := newReportTestContext("/api/dashboard/report?sprint=Sprint+42")
+	NewSprintReportHandler(svc).GetReport(c)
+
+	if svc.lastCapPercent != 20 || !strings.Contains(w.Body.String(), `"capPercent":20`) {
+		t.Fatalf("cap = %v, body = %s: want the admin's 20", svc.lastCapPercent, w.Body.String())
+	}
+
+	w, c = newReportTestContext("/api/dashboard/report?sprint=Sprint+42&cap=5")
+	NewSprintReportHandler(svc).GetReport(c)
+	if svc.lastCapPercent != 5 {
+		t.Fatalf("?cap= must still override for one report, got %v", svc.lastCapPercent)
 	}
 }

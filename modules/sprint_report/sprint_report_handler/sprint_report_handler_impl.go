@@ -3,6 +3,7 @@ package sprint_report_handler
 import (
 	"context"
 	"net/http"
+	"nudge/modules/app_setting/app_setting_holder"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -12,9 +13,10 @@ import (
 	"nudge/modules/sprint_report/sprint_report_service"
 )
 
-// defaultCapPercent is spec Open Question #7 — the deviation cap, matching
-// the PDF example's own 12% target, overridable per-report via ?cap=.
-const defaultCapPercent float64 = 12
+// defaultCapPercent is the deviation cap until an admin sets one in Admin ›
+// Pengaturan Aplikasi (spec Open Question #7: the PDF example's own 12%
+// target). The cap in force is read per request; ?cap= overrides it for one report.
+const defaultCapPercent = app_setting_holder.DefaultDeviationCapPercent
 
 type sprintReportHandlerImpl struct {
 	svc      sprint_report_service.SprintReportService
@@ -70,7 +72,7 @@ func (h *sprintReportHandlerImpl) GetReport(c *gin.Context) {
 
 	selected := c.QueryArray("sprint")
 
-	capPercent := defaultCapPercent
+	capPercent := app_setting_holder.DeviationCapPercent()
 	if raw := c.Query("cap"); raw != "" {
 		if parsed, err := strconv.ParseFloat(raw, 64); err == nil && parsed > 0 {
 			capPercent = parsed
