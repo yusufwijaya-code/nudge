@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, OnInit, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, OnInit, ViewChild, effect, inject } from '@angular/core';
 import { AsyncPipe, NgIf } from '@angular/common';
 import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
@@ -6,6 +6,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { BoardService } from '../../core/services/board.service';
 import { MuteStateService } from '../../core/services/mute-state.service';
 import { BoardContextService } from '../../core/services/board-context.service';
+import { OnboardingService } from '../../core/services/onboarding.service';
 import { NotificationSwitchService } from '../../core/services/notification-switch.service';
 import { BoardAvatarComponent } from '../../shared/ui/board-avatar.component';
 import { NotificationConsentComponent } from '../../shared/ui/notification-consent.component';
@@ -32,12 +33,24 @@ export class DashboardShellComponent implements OnInit {
   protected authService = inject(AuthService);
   protected muteState = inject(MuteStateService);
   protected boardContext = inject(BoardContextService);
+  protected onboarding = inject(OnboardingService);
   private boardService = inject(BoardService);
   private notifSwitch = inject(NotificationSwitchService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   // Each page opens at the top; ?board= switches keep the scroll.
   private readonly scrollReset = scrollTopOnPageChange();
+
+  constructor() {
+    // A user whose boards are all new has nothing to look at yet: step 2 (set up
+    // the board) comes first. With some registered boards the dashboard opens on
+    // those and the new ones wait in the picker.
+    effect(() => {
+      if (this.boardContext.loaded() && this.onboarding.loaded() && !this.boardContext.boards().length && this.onboarding.unregistered().length) {
+        this.router.navigate(['/onboarding'], { queryParams: { board: this.onboarding.unregistered()[0].boardId }, replaceUrl: true });
+      }
+    });
+  }
 
   @ViewChild('userMenu') private userMenu?: ElementRef<HTMLElement>;
   @ViewChild('boardMenu') private boardMenu?: ElementRef<HTMLElement>;
@@ -75,11 +88,18 @@ export class DashboardShellComponent implements OnInit {
       error: () => undefined,
     });
     this.boardContext.load();
+    this.onboarding.refresh();
   }
 
   protected toggleBoardMenu(): void {
     this.boardMenuOpen = !this.boardMenuOpen;
     if (this.boardMenuOpen) this.menuOpen = false;
+  }
+
+  /** A board with no Aturan Board yet goes straight to step 2 of the setup. */
+  protected setUpBoard(boardId: number): void {
+    this.boardMenuOpen = false;
+    this.router.navigate(['/onboarding'], { queryParams: { board: boardId } });
   }
 
   protected selectBoard(boardId: number | null): void {

@@ -2,6 +2,8 @@ package main
 
 import (
 	"net/http"
+	"nudge/modules/onboarding"
+	"nudge/modules/signup"
 
 	"github.com/gin-gonic/gin"
 
@@ -202,4 +204,18 @@ func MountTrackingRules(r *gin.Engine, cfg *config.AppConfig, authSvc auth_servi
 	admin := r.Group(cfg.BasePath + "/api/dashboard/admin")
 	admin.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg), auth_middleware.AdminMiddleware(cfg))
 	tracking_rule.AdminRoutes(admin, h)
+}
+
+// MountSignup mounts the registration API. It has no session middleware: the
+// visitor has no account yet, and the signed cookie from the Google callback is
+// the identity.
+func MountSignup(r *gin.Engine, cfg *config.AppConfig, h *signup.Handler) {
+	signup.Routes(r.Group(cfg.BasePath), h)
+}
+
+// MountOnboarding mounts step 2 of joining (the user's boards and their setup).
+func MountOnboarding(r *gin.Engine, cfg *config.AppConfig, authSvc auth_service.AuthService, h *onboarding.Handler) {
+	api := r.Group(cfg.BasePath + "/api")
+	api.Use(auth_middleware.AuthMiddlewareAPI(authSvc, cfg))
+	onboarding.Routes(api, h)
 }

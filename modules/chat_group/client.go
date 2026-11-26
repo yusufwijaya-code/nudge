@@ -101,6 +101,17 @@ func (c *Client) groupName(ctx context.Context) (string, error) {
 	return c.name, nil
 }
 
+// Check proves, right now, that the operator's token still works and the group
+// can be managed: it looks the group up again instead of trusting the cached
+// name, so a revoked token or a lost ownership shows up before anyone is added.
+func (c *Client) Check(ctx context.Context) error {
+	c.mu.Lock()
+	c.name = ""
+	c.mu.Unlock()
+	_, err := c.groupName(ctx)
+	return err
+}
+
 // AddMember adds email as a MEMBER; already being a member (409) is success.
 func (c *Client) AddMember(ctx context.Context, email string) error {
 	name, err := c.groupName(ctx)
