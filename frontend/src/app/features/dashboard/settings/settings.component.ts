@@ -113,11 +113,11 @@ export class SettingsComponent {
   /**
    * Umum = what applies to every board (master switch, sender, Jira key);
    * Per board = notification settings of the default / one board. Opens on
-   * "Per board" when a board is already picked in the navbar.
+   * "Umum" every time, whatever board is picked in the navbar.
    */
-  protected tab = signal<SettingsTab>(inject(SettingsScope).selectedId() === null ? 'umum' : 'board');
+  protected tab = signal<SettingsTab>('umum');
   /** Panels opened so far: each is mounted on first visit and then only hidden, never destroyed. */
-  protected visited = signal<Record<SettingsTab, boolean>>({ umum: this.tab() === 'umum', board: this.tab() === 'board' });
+  protected visited = signal<Record<SettingsTab, boolean>>({ umum: true, board: false });
   /** The user switched tabs at least once: only then does the incoming panel cross-fade (not on arrival). */
   protected tabSwitched = signal(false);
   /** Side the incoming tab panel slides in from (Per board is on the right). */

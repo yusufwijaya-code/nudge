@@ -141,7 +141,7 @@ describe('SettingsComponent', () => {
     expect(el().querySelector('[data-tab="board"]')!.getAttribute('aria-selected')).toBe('true');
   });
 
-  it('arriving on a board: a skeleton shaped like Per board, statuses fetched with the settings, each once', () => {
+  it('with a board picked: a skeleton shaped like Per board once that tab is opened, statuses fetched with the settings, each once', () => {
     const http = TestBed.inject(HttpTestingController);
     const pending = new Subject<SettingsResponse>();
     boardService.getSettings.calls.reset();
@@ -149,12 +149,12 @@ describe('SettingsComponent', () => {
     context.selectedId.set(28);
     fixture = TestBed.createComponent(SettingsComponent);
     fixture.detectChanges();
+    expect(component().tab()).toBe('umum');
+    openTab('board');
 
-    const skeleton = el().querySelector('[data-skeleton]') as HTMLElement;
-    expect(skeleton.dataset['skeleton']).toBe('board');
+    const skeleton = el().querySelector('[data-skeleton="board"]') as HTMLElement;
     expect(skeleton.querySelectorAll('.skeleton-chip').length).toBeGreaterThan(0);
     expect(skeleton.querySelectorAll('.skeleton-card').length).toBe(4);
-    expect(el().querySelector('.settings-stack')!.classList).not.toContain('tab-switched');
     // statuses already on their way, in parallel with the settings
     const statuses = http.expectOne((r) => r.url.endsWith('/boards/28/statuses'));
 
@@ -176,10 +176,10 @@ describe('SettingsComponent', () => {
     expect(el().querySelector('.settings-stack')!.classList).not.toContain('tab-switched');
   });
 
-  it('opens on Umum, or on Per board when a board is already picked', () => {
+  it('always opens on Umum, even when a board is already picked', () => {
     expect(TestBed.createComponent(SettingsComponent).componentInstance['tab']()).toBe('umum');
     context.selectedId.set(28);
-    expect(TestBed.createComponent(SettingsComponent).componentInstance['tab']()).toBe('board');
+    expect(TestBed.createComponent(SettingsComponent).componentInstance['tab']()).toBe('umum');
   });
 
   it('picks the board to configure from the chips in the Per board tab', () => {
