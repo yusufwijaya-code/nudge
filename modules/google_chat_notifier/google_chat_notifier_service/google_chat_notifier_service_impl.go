@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"nudge/modules/app_credential/app_credential_holder"
 	"strings"
 	"time"
 
 	"nudge/base/helpers/curl_helper"
-	"nudge/config"
 	"nudge/base/helpers/duration_helper"
+	"nudge/config"
 	"nudge/modules/google_chat_notifier/google_chat_notifier_dto"
 )
 
@@ -32,14 +33,18 @@ func (s *googleChatNotifierServiceImpl) SendReminder(ctx context.Context, msg go
 		}
 	}()
 
-	if s.cfg.GoogleChatWebhookURL == "" {
+	webhookURL := app_credential_holder.ChatWebhookURL()
+	if webhookURL == "" {
+		webhookURL = s.cfg.GoogleChatWebhookURL // the environment, until an admin sets one in Pengaturan Aplikasi
+	}
+	if webhookURL == "" {
 		return nil // no webhook configured — skip, do not fail the poll cycle
 	}
 
 	payload := chatPayload{Text: BuildMessageText(msg)}
 
 	_, err = curl_helper.CurlRequest[struct{}](
-		ctx, s.cfg.GoogleChatWebhookURL, nil, payload, http.MethodPost, 10000, false,
+		ctx, webhookURL, nil, payload, http.MethodPost, 10000, false,
 	)
 	if err != nil {
 		return fmt.Errorf("google_chat_notifier: SendReminder(%s) failed: %w", msg.IssueKey, err)

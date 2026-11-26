@@ -118,6 +118,9 @@ var appSettingSQL string
 //go:embed 0028_user_auto_done.sql
 var userAutoDoneSQL string
 
+//go:embed 0029_app_credential.sql
+var appCredentialSQL string
+
 //go:embed 0028b_auto_done_log.sql
 var autoDoneLogSQL string
 
@@ -251,6 +254,10 @@ func apply(db *sql.DB) error {
 		return err
 	}
 	if _, err := db.Exec(autoDoneLogSQL); err != nil {
+		return err
+	}
+	// Pengaturan Aplikasi › Kredensial & token — CREATE TABLE IF NOT EXISTS.
+	if _, err := db.Exec(appCredentialSQL); err != nil {
 		return err
 	}
 	// Jira token expiry (banner): one ADD COLUMN on the personal credentials,

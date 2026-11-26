@@ -20,6 +20,8 @@ import (
 	"nudge/modules/admin_dashboard/admin_dashboard_service"
 	"nudge/modules/admin_roster"
 	"nudge/modules/admin_roster/admin_roster_holder"
+	"nudge/modules/app_credential"
+	"nudge/modules/app_credential/app_credential_holder"
 	"nudge/modules/app_setting"
 	"nudge/modules/auth/auth_dto"
 	"nudge/modules/auth/auth_handler"
@@ -217,7 +219,7 @@ func main() {
 		Jira:        jira_client_service.NewIssueCreateClient(&cfg),
 		Credentials: jiraCredentialSvc,
 		Boards:      userDashboardSvc,
-		AI:          gemini_client.New(cfg.GeminiAPIKey, cfg.GeminiModel),
+		AI:          gemini_client.New(cfg.GeminiAPIKey, cfg.GeminiModel).WithKeyFunc(app_credential_holder.GeminiAPIKey),
 	})
 
 	// Chat commands are the web dashboard's features (Dashboard, Papan Tiket,
@@ -441,6 +443,16 @@ func main() {
 		chatGroupSvc = chat_group.NewService(chatGroupClient, chat_group.NewRepository(db))
 		log.Printf("main: auto join Google Group %s on", cfg.NudgeGroupEmail)
 	}
+	// Pengaturan Aplikasi › Kredensial & token: the Gemini key and the Chat webhook an admin
+	// can change at runtime (carried over from the environment once), the rest monitored.
+	credChecks := app_credential.Checks{}
+	if chatGroupClient != nil {
+		credChecks.Groups = chatGroupClient.Check
+	}
+	appCredentialSvc := app_credential.NewService(&cfg, app_credential.NewRepository(db), credChecks)
+	if err := appCredentialSvc.Load(context.Background()); err != nil {
+		log.Printf("main: loading the application credentials failed, the environment applies: %v", err)
+	}
 	loginHook := func(ctx context.Context, userID int64, claims auth_dto.GoogleClaims) {
 		if err := userAvatarSvc.SavePicture(ctx, userID, claims.Picture); err != nil {
 			log.Printf("main: saving profile picture of user %d failed: %v", userID, err)
@@ -554,6 +566,7 @@ func main() {
 	MountJiraAccount(router, &cfg, authSvc, jira_account.NewHandler(jiraAccountSvc))
 	MountAppSettings(router, &cfg, authSvc, app_setting.NewHandler(appSettingSvc))
 	MountAutoDone(router, &cfg, authSvc, auto_done.NewHandler(autoDoneSvc))
+	MountAppCredentials(router, &cfg, authSvc, app_credential.NewHandler(appCredentialSvc))
 
 	srv := &http.Server{
 		Addr:    ":" + cfg.Port,

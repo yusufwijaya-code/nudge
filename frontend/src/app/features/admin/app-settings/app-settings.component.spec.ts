@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import { AppSettingsComponent } from './app-settings.component';
 import { AppSettings } from '../../../core/services/app-settings.service';
 import { JiraAccountService } from '../../../core/services/jira-account.service';
+import { AppCredentialService } from '../../../core/services/app-credential.service';
 import { ToastService } from '../../../core/ui/toast.service';
 import { NEVER } from 'rxjs';
 
@@ -31,6 +32,7 @@ describe('AppSettingsComponent', () => {
         provideHttpClient(), provideHttpClientTesting(), provideRouter([]),
         { provide: ToastService, useValue: toast },
         // The Jira account card is tested on its own: keep it quiet here.
+        { provide: AppCredentialService, useValue: { list: () => NEVER, expiring: () => NEVER } },
         { provide: JiraAccountService, useValue: { status: () => NEVER, test: () => NEVER, save: () => NEVER, saveExpiry: () => NEVER, reset: () => NEVER, expiringUsers: () => NEVER } },
       ],
     }).compileComponents();
@@ -48,6 +50,7 @@ describe('AppSettingsComponent', () => {
     expect((q('[data-deviation]') as HTMLInputElement).value).toBe('12');
     expect(q('[data-example]')!.textContent).toContain('8,8–11,2 jam');
     expect(fixture.nativeElement.querySelector('app-jira-account')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('app-credentials-card')).not.toBeNull();
     expect(save().disabled).toBeTrue(); // nothing changed yet
     expect(q('[data-default]')).toBeNull(); // already the default
   });

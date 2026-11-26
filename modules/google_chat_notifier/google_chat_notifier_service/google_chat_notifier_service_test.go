@@ -278,8 +278,8 @@ func TestBuildMessageText_EndsWithHelpHintAndNoOKRHashtag(t *testing.T) {
 
 func TestBuildMessageText_NeverIncludesGeserHint(t *testing.T) {
 	for name, msg := range map[string]google_chat_notifier_dto.ReminderMessage{
-		"tier reminder":    {IssueKey: "OMS-1", Tier: "30m"},
-		"overage":          {IssueKey: "OMS-1", IsOverage: true},
+		"tier reminder": {IssueKey: "OMS-1", Tier: "30m"},
+		"overage":       {IssueKey: "OMS-1", IsOverage: true},
 	} {
 		text := BuildMessageText(msg)
 		if strings.Contains(text, "/n-geser") {

@@ -27,24 +27,8 @@ export interface LiveTime {
   frozen: boolean;
   /** The next counting change has passed: the card should be reloaded from the server. */
   stale: boolean;
-  /** Target percentage against the allowed deviation (see targetPercent). */
-  target: number;
 }
 
-/** The deviation a ticket may have when none is known yet (the app default). */
-export const DEFAULT_DEVIATION_CAP = 12;
-
-/**
- * How on target a ticket is, as the sprint's Achievement does it: 100% while its time is
- * within the allowed deviation of the budget (above or below), else cap ÷ deviation × 100.
- * For a running ticket it answers "if this finished now, how close to its estimate is it?".
- */
-export function targetPercent(elapsedSeconds: number, budgetSeconds: number, capPercent: number): number {
-  if (budgetSeconds <= 0) return 0;
-  const deviation = (Math.abs(elapsedSeconds - budgetSeconds) / budgetSeconds) * 100;
-  if (deviation <= capPercent) return 100;
-  return Math.round((capPercent / deviation) * 100);
-}
 
 /**
  * The elapsed / remaining time of a running ticket at `nowMs`, ticking by itself
@@ -52,7 +36,7 @@ export function targetPercent(elapsedSeconds: number, budgetSeconds: number, cap
  * whether time counts now and when that next changes. A card without those
  * fields (older answer, stopped clock) keeps the server's numbers.
  */
-export function liveTime(c: LiveCard, nowMs: number, capPercent: number = DEFAULT_DEVIATION_CAP): LiveTime {
+export function liveTime(c: LiveCard, nowMs: number): LiveTime {
   const base = c.elapsedSeconds;
   const t0 = c.serverNow ? Date.parse(c.serverNow) : NaN;
   let elapsed = base;
@@ -85,6 +69,5 @@ export function liveTime(c: LiveCard, nowMs: number, capPercent: number = DEFAUL
     running,
     frozen,
     stale,
-    target: targetPercent(elapsed, budget, capPercent),
   };
 }

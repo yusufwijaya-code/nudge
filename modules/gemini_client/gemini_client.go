@@ -36,7 +36,9 @@ func (e *QuotaError) Error() string {
 
 type Client struct {
 	apiKey, model, baseURL string
-	http                   *http.Client
+	// keyFn, when set, is asked for the key on every call (an admin can change it at runtime); "" falls back to apiKey.
+	keyFn func() string
+	http  *http.Client
 }
 
 func New(apiKey, model string) *Client {
@@ -45,7 +47,19 @@ func New(apiKey, model string) *Client {
 
 func (c *Client) WithBaseURL(u string) *Client { c.baseURL = strings.TrimRight(u, "/"); return c }
 
-func (c *Client) Configured() bool { return c.apiKey != "" }
+// WithKeyFunc lets the key change while the app runs; apiKey stays the fallback.
+func (c *Client) WithKeyFunc(fn func() string) *Client { c.keyFn = fn; return c }
+
+func (c *Client) key() string {
+	if c.keyFn != nil {
+		if k := strings.TrimSpace(c.keyFn()); k != "" {
+			return k
+		}
+	}
+	return c.apiKey
+}
+
+func (c *Client) Configured() bool { return c.key() != "" }
 
 func (c *Client) GenerateJSON(ctx context.Context, system, user string, schema map[string]any, out any) error {
 	if !c.Configured() {
@@ -81,7 +95,7 @@ func (c *Client) call(ctx context.Context, system, user string, schema map[strin
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-goog-api-key", c.apiKey)
+	req.Header.Set("x-goog-api-key", c.key())
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("gemini: request failed: %w", err)

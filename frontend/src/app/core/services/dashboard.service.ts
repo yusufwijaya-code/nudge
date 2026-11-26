@@ -46,8 +46,6 @@ export interface BoardResponse {
   columns: { status: string; cards: TicketCard[] }[];
   /** Subtasks/linked items (tracked status) outside the sprint — only for the active/review cards. */
   related?: TicketCard[];
-  /** The deviation (percent) an admin allows; the Target percentage of a running ticket uses it. */
-  deviationCapPercent?: number;
 }
 
 export interface SprintReportRow {

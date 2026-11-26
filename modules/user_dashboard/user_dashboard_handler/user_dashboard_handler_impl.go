@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"nudge/modules/app_setting/app_setting_holder"
 	"strconv"
 	"time"
 
@@ -214,8 +213,7 @@ func (h *userDashboardHandlerImpl) GetBoard(c *gin.Context) {
 	if related == nil {
 		related = []user_dashboard_dto.Card{}
 	}
-	// deviationCapPercent: the deviation an admin allows (Pengaturan Aplikasi), for the "Target" percentage of a running ticket.
-	c.JSON(http.StatusOK, gin.H{"columns": columns, "related": related, "deviationCapPercent": app_setting_holder.DeviationCapPercent()})
+	c.JSON(http.StatusOK, gin.H{"columns": columns, "related": related})
 }
 
 func (h *userDashboardHandlerImpl) GetTeam(c *gin.Context) {
