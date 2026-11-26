@@ -1,39 +1,136 @@
-// Global table / skeleton / check-box styles live in styles.scss.
-.users-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-left: auto;
-  .search-input { margin-left: 0; } }
+// Global table / skeleton / badge styles live in styles.scss. This page never scrolls:
+// the table is as wide as the card (fixed layout, long text is cut with "…"), and the
+// rows are cut into pages.
+.users-card { padding-bottom: 0; }
 
-.filter-check {
-  display: inline-flex; align-items: center; gap: 10px; height: 38px; padding: 0 14px 0 10px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
-  font-size: .86rem; font-weight: 500; color: var(--text); cursor: pointer; user-select: none;
-  transition: border-color var(--fast) var(--ease), background-color var(--fast) var(--ease), transform var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
-  &:hover { border-color: #c5c0ff; background: #fcfbff; }
-  &:active { transform: scale(.98); }
-  &:has(input:focus-visible) { box-shadow: 0 0 0 4px var(--primary-ring); border-color: var(--primary); }
-  &.checked { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
-  &.disabled { opacity: .55; pointer-events: none; }
-  .check-box { width: 20px; height: 20px; border-radius: 6px; }
+// ---- toolbar: tabs on the left, search on the right ----
+.users-toolbar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 16px;
+  margin: 0 0 18px;
 }
+.seg-tabs {
+  display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);
+  max-width: 100%; flex-wrap: wrap;
+}
+.seg-tab {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent;
+  font: inherit; font-size: .84rem; font-weight: 600; color: var(--text-muted); cursor: pointer; white-space: nowrap;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+  &:hover:not(:disabled):not(.on) { color: var(--text); background: rgba(255, 255, 255, .7); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-ring); }
+  &.on { background: var(--surface); color: var(--primary-strong); box-shadow: var(--shadow-sm, 0 1px 3px rgba(17, 18, 39, .12)); }
+  &:disabled { opacity: .55; cursor: default; }
+}
+.seg-count {
+  min-width: 22px; padding: 1px 7px; border-radius: 999px; background: rgba(17, 18, 39, .07); font-size: .72rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
+  .on & { background: var(--primary-soft); color: var(--primary-strong); }
+}
+.users-search { margin-left: 0; width: min(300px, 100%); flex: 0 1 300px; }
 
-table.admin-users { font-size: .9rem; }
-table.admin-users tbody tr { animation: fade-in 260ms var(--ease) backwards; }
+// ---- table: no horizontal scroll ----
+.users-wrap { overflow: visible; margin: 0 -24px; border-radius: 0; }
+table.users-table {
+  table-layout: fixed; width: 100%; font-size: .88rem;
+  .c-user { width: 25%; } .c-status { width: 8%; } .c-jira { width: 19%; } .c-cred { width: 14%; }
+  .c-app { width: 11%; } .c-sender { width: 8%; } .c-actions { width: 15%; }
+  th, td { padding-left: 12px; padding-right: 12px; overflow: hidden; text-overflow: ellipsis; }
+  th:first-child, td:first-child { padding-left: 24px; }
+  th:last-child, td:last-child { padding-right: 24px; }
+  td.actions { overflow: visible; }
+  tbody tr { animation: fade-in 260ms var(--ease) backwards; }
+}
+.users-table .user-cell {
+  min-width: 0;
+  > div { min-width: 0; }
+  strong, small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  strong { font-size: .86rem; }
+  .role-badge { margin-top: 3px; }
+}
+.users-table .inline-edit { min-width: 0; input { min-width: 0; flex: 1; text-overflow: ellipsis; } .icon-btn { flex: none; } }
+.users-table .cred-cell { flex-wrap: nowrap; min-width: 0; .cred-badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
+.icon-btn.sm { width: 26px; height: 26px; border-radius: 7px; flex: none; }
 
-// Skeleton rows share the real table's columns and row height, so swapping
-// to the data doesn't shift anything.
+// ---- actions: icon buttons ----
+.action-row { gap: 6px; flex-wrap: nowrap; }
+a.icon-btn { text-decoration: none; }
+.icon-btn {
+  &.warn:hover:not(:disabled) { color: #b4630a; border-color: #f0b15a; background: var(--accent-soft); }
+  &.ok { color: var(--success); border-color: rgba(18, 161, 80, .4); background: var(--success-soft); }
+  &.ok:hover:not(:disabled) { color: var(--success); border-color: var(--success); background: var(--success-soft); }
+  &.on { color: var(--primary-strong); border-color: var(--primary); background: var(--primary-soft); }
+}
+td.actions .msg.error { white-space: normal; text-align: right; }
+
+// ---- pagination ----
+.users-pager {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px;
+  margin: 0 -24px; padding: 14px 24px; border-top: 1px solid var(--border);
+}
+.pager-info { font-size: .84rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pager-size { display: inline-flex; align-items: center; gap: 10px; margin-left: auto; font-size: .82rem; color: var(--text-muted); app-select { width: 118px; } }
+.pager-nav { display: inline-flex; align-items: center; gap: 4px; }
+.pager-page {
+  min-width: 34px; height: 34px; padding: 0 8px; border: 1px solid transparent; border-radius: 9px; background: transparent; font: inherit; font-size: .84rem; font-weight: 600;
+  color: var(--text-muted); cursor: pointer; font-variant-numeric: tabular-nums;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+  &:hover:not(.on) { background: var(--surface-2); color: var(--text); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--primary-ring); }
+  &.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+}
+.pager-gap { padding: 0 4px; color: var(--text-faint); }
+
+// ---- skeleton: same columns and row height as the table ----
 .users-skeleton {
   tbody tr { animation: fade-up 320ms var(--ease) backwards; cursor: default; }
   tbody tr:hover { background: transparent; }
   .sk-avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; }
   .sk-lines { display: flex; flex-direction: column; gap: 6px; }
-  .sk-line { display: block; height: 12px; width: 150px; &.short { width: 90px; height: 10px; } }
-  .sk-pill { display: block; height: 22px; width: 70px; border-radius: 999px; &.wide { width: 96px; border-radius: 6px; } }
-  .sk-input { display: block; height: 34px; width: 220px; border-radius: var(--radius-sm); }
+  .sk-line { display: block; height: 12px; width: 140px; &.short { width: 90px; height: 10px; } }
+  .sk-pill { display: block; height: 22px; width: 64px; border-radius: 999px; &.wide { width: 90px; border-radius: 6px; } }
+  .sk-input { display: block; height: 34px; width: 100%; max-width: 200px; border-radius: var(--radius-sm); }
   .sk-actions { display: inline-flex; align-items: center; gap: 6px; }
-  .sk-btn { display: block; height: 30px; width: 64px; border-radius: 8px; &.wide { width: 112px; } }
-  .sk-icon { display: block; width: 32px; height: 32px; border-radius: 8px; }
+  .sk-icon { display: block; width: 34px; height: 34px; border-radius: 9px; }
+}
+
+// ---- narrower cards: drop the least needed columns first ----
+@media (max-width: 1280px) {
+  table.users-table {
+    .col-sender { display: none; }
+    .c-sender { width: 0; }
+    .c-user { width: 27%; } .c-jira { width: 21%; } .c-actions { width: 16%; }
+  }
+}
+@media (max-width: 1060px) {
+  table.users-table {
+    .col-app { display: none; }
+    .c-app { width: 0; }
+    .c-user { width: 31%; } .c-jira { width: 24%; } .c-cred { width: 17%; } .c-status { width: 9%; } .c-actions { width: 19%; }
+  }
+}
+
+// ---- phones and small tablets: every row becomes a card ----
+@media (max-width: 820px) {
+  .users-wrap { margin: 0 -18px; }
+  table.users-table {
+    display: block;
+    colgroup, thead { display: none; }
+    tbody { display: grid; gap: 12px; padding: 0 18px 14px; }
+    .col-sender, .col-app { display: revert; }
+    tbody tr {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+    }
+    td, td:first-child, td:last-child { display: block; padding: 0; border: 0; overflow: visible; }
+    td:first-child, td.actions { grid-column: 1 / -1; }
+    td[data-label]:not(:first-child)::before {
+      content: attr(data-label); display: block; margin-bottom: 3px; font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-muted);
+    }
+    td.actions { padding-top: 10px; border-top: 1px solid var(--border); .action-row { display: flex; justify-content: flex-end; } }
+  }
+  .users-pager { margin: 0 -18px; padding: 12px 18px; .pager-size { margin-left: 0; } }
+  .users-search { flex-basis: 100%; width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  table.admin-users tbody tr, .users-skeleton tbody tr { animation: none; }
-  .filter-check { transition: none; &:active { transform: none; } }
+  table.users-table tbody tr, .users-skeleton tbody tr { animation: none; }
+  .seg-tab, .pager-page { transition: none; }
 }

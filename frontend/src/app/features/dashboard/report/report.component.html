@@ -12,7 +12,7 @@
     <div class="rpt-controls">
       <div class="rpt-field">
         <span class="rpt-label">Tanggal tiket dibuat</span>
-        <app-date-range-picker data-range [from]="from()" [to]="to()" [max]="maxDay" placeholder="Pilih rentang" ariaLabel="Rentang tanggal tiket dibuat" (rangeChange)="pick($event)" />
+        <app-date-range-picker data-range [months]="2" [from]="from()" [to]="to()" [max]="maxDay" placeholder="Pilih rentang" ariaLabel="Rentang tanggal tiket dibuat" (rangeChange)="pick($event)" />
       </div>
       <div class="rpt-field">
         <span class="rpt-label">Board</span>
@@ -132,23 +132,24 @@
         </header>
         <div class="rpt-table-wrap">
           <table class="rpt-table">
+            <colgroup><col class="c-ticket" /><col class="c-est" /><col class="c-raw" /><col class="c-ded" /><col class="c-cnt" /><col class="c-dev" /><col class="c-score" /><col class="c-res" /></colgroup>
             <thead>
               <tr><th>Tiket</th><th class="num">Estimasi</th><th class="num">Kotor</th><th class="num">Potongan</th><th class="num">Dihitung</th><th class="num">Deviasi</th><th class="num">Skor</th><th>Hasil</th></tr>
             </thead>
             <tbody>
               @for (t of r.tickets; track t.key) {
                 <tr class="rpt-row" [class.open]="isOpen(t.key)" [attr.data-ticket]="t.key" (click)="toggle(t.key)" tabindex="0" (keydown.enter)="toggle(t.key)" [attr.aria-expanded]="isOpen(t.key)">
-                  <td>
+                  <td class="c-main">
                     <span class="rpt-key"><app-icon class="rpt-caret" name="chevron-right" [size]="14" />{{ t.key }}</span>
-                    <span class="rpt-title">{{ t.summary }}</span>
+                    <span class="rpt-title" [attr.title]="t.summary">{{ t.summary }}</span>
                   </td>
-                  <td class="num">{{ hm(t.estimateSeconds) }}</td>
-                  <td class="num">{{ hm(t.rawSeconds) }}</td>
-                  <td class="num muted">–{{ hm(t.deductedSeconds) }}</td>
-                  <td class="num strong">{{ hm(t.countedSeconds) }}</td>
-                  <td class="num" [class.good]="t.within" [class.bad]="!t.within">{{ pct(t.deviationPercent) }}</td>
-                  <td class="num" [class.good]="t.within" [class.bad]="!t.within">{{ pct(t.scorePercent) }}</td>
-                  <td><span class="rpt-badge" [class.good]="t.within" [class.bad]="!t.within">{{ t.within ? 'Sesuai' : 'Di luar' }}</span></td>
+                  <td class="num" data-label="Estimasi">{{ hm(t.estimateSeconds) }}</td>
+                  <td class="num" data-label="Kotor">{{ hm(t.rawSeconds) }}</td>
+                  <td class="num muted" data-label="Potongan">–{{ hm(t.deductedSeconds) }}</td>
+                  <td class="num strong" data-label="Dihitung">{{ hm(t.countedSeconds) }}</td>
+                  <td class="num" data-label="Deviasi" [class.good]="t.within" [class.bad]="!t.within">{{ pct(t.deviationPercent) }}</td>
+                  <td class="num" data-label="Skor" [class.good]="t.within" [class.bad]="!t.within">{{ pct(t.scorePercent) }}</td>
+                  <td data-label="Hasil"><span class="rpt-badge" [class.good]="t.within" [class.bad]="!t.within">{{ t.within ? 'Sesuai' : 'Di luar' }}</span></td>
                 </tr>
                 @if (isOpen(t.key)) {
                   <tr class="rpt-detail-row" [attr.data-detail]="t.key">
@@ -188,14 +189,14 @@
             </tbody>
             <tfoot>
               <tr>
-                <td>Total</td>
-                <td class="num">{{ hm(r.summary.estimateSeconds) }}</td>
-                <td class="num">{{ hm(r.summary.rawSeconds) }}</td>
-                <td class="num">–{{ hm(r.summary.deductedSeconds) }}</td>
-                <td class="num">{{ hm(r.summary.countedSeconds) }}</td>
-                <td class="num">{{ pct(r.summary.aggregateDeviationPercent) }}</td>
-                <td class="num">{{ pct(r.summary.scorePercent) }}</td>
-                <td><span class="rpt-badge" [class.good]="r.summary.within" [class.bad]="!r.summary.within">{{ r.summary.within ? 'Sesuai' : 'Di luar' }}</span></td>
+                <td class="c-main">Total</td>
+                <td class="num" data-label="Estimasi">{{ hm(r.summary.estimateSeconds) }}</td>
+                <td class="num" data-label="Kotor">{{ hm(r.summary.rawSeconds) }}</td>
+                <td class="num" data-label="Potongan">–{{ hm(r.summary.deductedSeconds) }}</td>
+                <td class="num" data-label="Dihitung">{{ hm(r.summary.countedSeconds) }}</td>
+                <td class="num" data-label="Deviasi">{{ pct(r.summary.aggregateDeviationPercent) }}</td>
+                <td class="num" data-label="Skor">{{ pct(r.summary.scorePercent) }}</td>
+                <td data-label="Hasil"><span class="rpt-badge" [class.good]="r.summary.within" [class.bad]="!r.summary.within">{{ r.summary.within ? 'Sesuai' : 'Di luar' }}</span></td>
               </tr>
             </tfoot>
           </table>

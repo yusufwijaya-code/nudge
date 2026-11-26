@@ -61,6 +61,12 @@ interface DayCell {
   weekend: boolean;
 }
 
+/** One month of the popup. */
+interface Panel {
+  title: string;
+  cells: DayCell[];
+}
+
 /**
  * One-field date range picker (replaces two <input type="date">, whose popup
  * can't be styled). First click picks the start, second click the end; a
@@ -91,8 +97,8 @@ interface DayCell {
       <app-icon class="ui-select-chevron" name="chevron-down" [size]="16" />
     </button>
     @if (open()) {
-      <div class="ui-date-popup" role="dialog" [attr.aria-label]="ariaLabel() || (single() ? 'Pilih tanggal' : 'Pilih rentang tanggal')" (keydown.escape)="close()">
-        <div class="ui-date-head">
+      <div class="ui-date-popup" [class.dual]="months() > 1" role="dialog" [attr.aria-label]="ariaLabel() || (single() ? 'Pilih tanggal' : 'Pilih rentang tanggal')" (keydown.escape)="close()">
+        <div class="ui-date-head" [class.dual]="months() > 1">
           <span class="ui-date-navgroup">
             @if (yearNav()) {
               <button type="button" class="ui-date-nav" aria-label="Tahun sebelumnya" data-prev-year (click)="shift(-12)">«</button>
@@ -101,7 +107,9 @@ interface DayCell {
               <app-icon name="chevron-left" [size]="16" />
             </button>
           </span>
-          <span class="ui-date-title">{{ title() }}</span>
+          @if (months() === 1) {
+            <span class="ui-date-title">{{ panels()[0].title }}</span>
+          }
           <span class="ui-date-navgroup">
             <button type="button" class="ui-date-nav" aria-label="Bulan berikutnya" data-next (click)="shift(1)">
               <app-icon name="chevron-right" [size]="16" />
@@ -114,26 +122,40 @@ interface DayCell {
         @if (!single()) {
           <p class="ui-date-step">{{ picking() ? 'Pilih tanggal selesai' : 'Pilih tanggal mulai' }}</p>
         }
-        <div class="ui-date-grid" role="grid" (mouseleave)="hover.set('')">
-          @for (h of weekHead; track h) {
-            <span class="ui-date-weekday" [class.weekend]="h === 'Sab' || h === 'Min'">{{ h }}</span>
-          }
-          @for (cell of cells(); track cell.date) {
-            <button
-              type="button"
-              class="ui-date-cell"
-              [attr.data-day]="cell.date"
-              [class.outside]="cell.outside"
-              [class.weekend]="cell.weekend"
-              [class.today]="cell.date === today"
-              [class.in-range]="inRange(cell.date)"
-              [class.selected]="isEdge(cell.date)"
-              [disabled]="isDisabled(cell.date)"
-              (mouseenter)="hover.set(cell.date)"
-              (click)="pick(cell.date)"
-            >
-              {{ cell.day }}
-            </button>
+        <div class="ui-date-months" (mouseleave)="hover.set('')">
+          @for (panel of panels(); track $index) {
+            <div class="ui-date-panel" data-panel>
+              @if (months() > 1) {
+                <span class="ui-date-title ui-date-panel-title">{{ panel.title }}</span>
+              }
+              <div class="ui-date-grid" role="grid">
+                @for (h of weekHead; track h) {
+                  <span class="ui-date-weekday" [class.weekend]="h === 'Sab' || h === 'Min'">{{ h }}</span>
+                }
+                @for (cell of panel.cells; track cell.date) {
+                  @if (cell.outside && months() > 1) {
+                    <!-- the neighbouring month shows its own days in its own panel -->
+                    <span class="ui-date-blank" aria-hidden="true"></span>
+                  } @else {
+                    <button
+                      type="button"
+                      class="ui-date-cell"
+                      [attr.data-day]="cell.date"
+                      [class.outside]="cell.outside"
+                      [class.weekend]="cell.weekend"
+                      [class.today]="cell.date === today"
+                      [class.in-range]="inRange(cell.date)"
+                      [class.selected]="isEdge(cell.date)"
+                      [disabled]="isDisabled(cell.date)"
+                      (mouseenter)="hover.set(cell.date)"
+                      (click)="pick(cell.date)"
+                    >
+                      {{ cell.day }}
+                    </button>
+                  }
+                }
+              </div>
+            </div>
           }
         </div>
         <div class="ui-date-footer">
@@ -162,6 +184,8 @@ export class DateRangePickerComponent {
   disabled = input(false);
   /** Adds jump-a-year buttons next to the month arrows, for dates that are a year or so away. */
   yearNav = input(false);
+  /** Months shown side by side (2 for a range: the end is often in the next month). */
+  months = input<1 | 2>(1);
   rangeChange = output<DateRange>();
 
   protected readonly weekHead = WEEK_HEAD;
@@ -180,10 +204,17 @@ export class DateRangePickerComponent {
   protected hover = signal('');
   private view = signal({ y: 0, m: 0 });
 
-  protected title = computed(() => `${MONTHS[this.view().m]} ${this.view().y}`);
-
-  protected cells = computed<DayCell[]>(() => {
+  protected panels = computed<Panel[]>(() => {
     const { y, m } = this.view();
+    return Array.from({ length: this.months() }, (_, i) => {
+      const d = new Date(Date.UTC(y, m + i, 1));
+      const py = d.getUTCFullYear();
+      const pm = d.getUTCMonth();
+      return { title: `${MONTHS[pm]} ${py}`, cells: this.buildCells(py, pm) };
+    });
+  });
+
+  private buildCells(y: number, m: number): DayCell[] {
     const lead = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7;
     const out: DayCell[] = [];
     for (let i = 0; i < 42; i++) {
@@ -197,7 +228,7 @@ export class DateRangePickerComponent {
       });
     }
     return out.slice(35).every((c) => c.outside) ? out.slice(0, 35) : out;
-  });
+  }
 
   /** The span to highlight: the draft, or start → hovered day while picking. */
   private span = computed<[string, string]>(() => {
@@ -217,6 +248,7 @@ export class DateRangePickerComponent {
     this.draftFrom.set(this.from());
     this.draftTo.set(this.to());
     this.picking.set(false);
+    // A range opens with its start in the first month, so its end is in view; a lone date is centred.
     const [y, m] = parts(this.from() || this.today);
     this.view.set({ y, m: m - 1 });
     this.dropUp.set(shouldDropUp(this.host.nativeElement, POPUP_HEIGHT));

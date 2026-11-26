@@ -78,7 +78,8 @@ describe('ReportComponent', () => {
     fixture.detectChanges();
   }
 
-  it('starts on this month, for the board picked in the navbar', () => {
+  it('starts on this month, for the board picked in the navbar, with a two-month range picker', () => {
+    expect(q('[data-range]')).not.toBeNull();
     expect(q('[data-board]')!.textContent).toContain('ESB Core Board');
     expect(q('[data-preset="month"]')!.classList).toContain('on');
     expect(q('[data-card="intro"]')).not.toBeNull();
@@ -98,6 +99,20 @@ describe('ReportComponent', () => {
     expect(qa('[data-ticket]').length).toBe(2);
     expect(q('[data-excluded="CORE-3"]')!.textContent).toContain('Story Point');
     http.expectNone(job('/pdf'));
+  }));
+
+  it('fits the card without any horizontal scroll: a fixed-width table that is not clipped by a scrolling wrapper', fakeAsync(() => {
+    runToDone('show');
+    tick(500);
+    fixture.detectChanges();
+    const wrap = q('.rpt-table-wrap')!;
+    expect(getComputedStyle(wrap).overflowX).not.toBe('auto');
+    expect(getComputedStyle(wrap).overflowX).not.toBe('scroll');
+    const table = q('table.rpt-table') as HTMLTableElement;
+    expect(getComputedStyle(table).tableLayout).toBe('fixed');
+    expect(table.scrollWidth).toBeLessThanOrEqual(wrap.clientWidth + 1);
+    // Every column is there to read.
+    expect(qa('thead th').map((th) => th.textContent!.trim())).toEqual(['Tiket', 'Estimasi', 'Kotor', 'Potongan', 'Dihitung', 'Deviasi', 'Skor', 'Hasil']);
   }));
 
   it('opens a ticket to show its time per status, every deduction and the comparison', fakeAsync(() => {
