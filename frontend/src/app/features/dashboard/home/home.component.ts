@@ -208,6 +208,11 @@ export class HomeComponent {
   /** Subtasks/linked items outside the sprint: only feed the active/review cards. */
   protected related = signal<TicketCard[]>([]);
   protected movingKey = signal<string | null>(null);
+  /** The button that started the running move; only that one shows the spinner. */
+  protected movingTarget = signal<TransitionTarget | null>(null);
+  protected isMoving(ticket: TicketCard, target: TransitionTarget): boolean {
+    return this.movingKey() === ticket.issueKey && this.movingTarget() === target;
+  }
   protected expanded = signal<Record<string, boolean>>({});
 
   protected reportLoading = signal(true);
@@ -517,6 +522,11 @@ export class HomeComponent {
     this.expanded.set({ ...this.expanded(), [status]: !this.isExpanded(status) });
   }
 
+  private stopMoving(): void {
+    this.movingKey.set(null);
+    this.movingTarget.set(null);
+  }
+
   protected async move(ticket: TicketCard, target: TransitionTarget): Promise<void> {
     const labels: Record<TransitionTarget, string> = { 'code-process': 'Code Process', 'code-review': 'Code Review', 'code-completed': 'Code Completed', todo: 'To Do' };
     const label = labels[target];
@@ -529,22 +539,23 @@ export class HomeComponent {
     if (!confirmed) return;
 
     this.movingKey.set(ticket.issueKey);
+    this.movingTarget.set(target);
     this.dashboard.transitionTicket(ticket.issueKey, target).subscribe({
       next: (res) => {
-        this.movingKey.set(null);
+        this.stopMoving();
         this.toast.success(`${ticket.issueKey} digeser ke ${label}`, res?.message);
         this.loadBoard();
       },
       error: async (err) => {
         const req = fieldsRequired(err);
         if (!req) {
-          this.movingKey.set(null);
+          this.stopMoving();
           this.toast.error(`Gagal menggeser ${ticket.issueKey}`, err?.error?.error ?? err?.error?.message ?? 'Coba lagi sebentar.');
           return;
         }
         // Jira needs fields first: fill them, then the move runs.
         const done = await this.moveFields.open({ ...req, issueKey: req.issueKey || ticket.issueKey, issueType: ticket.issueType, issueTypeIconUrl: ticket.issueTypeIconUrl });
-        this.movingKey.set(null);
+        this.stopMoving();
         if (!done) return;
         this.toast.success(`${ticket.issueKey} digeser ke ${done.status || req.transition.to}`, done.message);
         this.loadBoard();

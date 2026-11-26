@@ -3,7 +3,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { BehaviorSubject, of, throwError } from 'rxjs';
+import { BehaviorSubject, Subject, of, throwError } from 'rxjs';
 import { HomeComponent, budgetLevel, budgetPercent, firstName, hoursDuration, shortDuration, sprintRange, toTree, whenLabel, withBudget } from './home.component';
 import { DashboardService, TicketCard } from '../../../core/services/dashboard.service';
 import { BoardContextService, BoardSummary } from '../../../core/services/board-context.service';
@@ -370,6 +370,35 @@ describe('HomeComponent', () => {
     expect(dashboard.transitionTicket).toHaveBeenCalledWith('OMS-11', 'code-review');
     expect(toast.success).toHaveBeenCalled();
     expect(dashboard.getBoard).toHaveBeenCalledTimes(2);
+  });
+
+  // The spinner belongs to the button that was clicked, not to its sibling.
+  it('spins only the clicked button while a ticket moves, in Sedang dikerjakan and Sedang di-review', async () => {
+    confirm.ask.and.resolveTo(true);
+    const pending = new Subject<{ message: string }>();
+    dashboard.transitionTicket.and.returnValue(pending);
+    const buttons = (card: string) => Array.from(el().querySelectorAll(`[data-card="${card}"] .ticket-actions .btn`)) as HTMLButtonElement[];
+    const loading = (card: string) => buttons(card).filter((b) => b.classList.contains('loading')).map((b) => b.textContent!.replace(/\s+/g, ' ').trim());
+
+    buttons('active').find((b) => b.textContent!.includes('To Do'))!.click();
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(loading('active')).toEqual(['To Do']);
+    expect(buttons('active').every((b) => b.disabled)).toBeTrue();
+    pending.next({ message: 'ok' }); fixture.detectChanges();
+    expect(loading('active')).toEqual([]);
+
+    const review = new Subject<{ message: string }>();
+    dashboard.transitionTicket.and.returnValue(review);
+    buttons('active').find((b) => b.textContent!.includes('Code Review'))!.click();
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(loading('active')).toEqual(['Code Review']);
+    review.next({ message: 'ok' }); fixture.detectChanges();
+
+    const done = new Subject<{ message: string }>();
+    dashboard.transitionTicket.and.returnValue(done);
+    buttons('review')[0].click();
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(loading('review')).toEqual(['Code Completed']);
   });
 
   it('opens the fields dialog when the move needs fields, then reloads once saved', async () => {
