@@ -66,8 +66,9 @@ describe('AdminUsersComponent', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(3);
 
-    const box = fixture.nativeElement.querySelector('[data-filter-chat-app]') as HTMLInputElement;
-    box.click();
+    const tab = fixture.nativeElement.querySelector('[data-filter-chat-app]') as HTMLButtonElement;
+    expect(tab.textContent).toContain('1'); // one active user without the Nudge App
+    tab.click();
     fixture.detectChanges();
 
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
@@ -134,15 +135,18 @@ describe('AdminUsersComponent', () => {
     expect(user.jiraAccountId).toBe('new-id');
   });
 
-  it('only shows the Hapus Credential button when the user has a credential', () => {
+  it('only shows the remove-credential icon button when the user has a credential', () => {
     const withCred = { userId: 1, email: 'a@esb.co.id', userName: 'A', flagActive: true, createdDate: '', jiraAccountId: '', hasCredential: true, credentialMasked: '••••ab3f', chatAppActivated: false, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'operator' as const, isAdmin: false, isOwner: false };
     const withoutCred = { userId: 2, email: 'b@esb.co.id', userName: 'B', flagActive: true, createdDate: '', jiraAccountId: '', hasCredential: false, credentialMasked: '', chatAppActivated: false, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'operator' as const, isAdmin: false, isOwner: false };
     adminService.listUsers.and.returnValue(of({ users: [withCred, withoutCred] }));
     fixture.detectChanges();
 
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
-    expect(rows[0].textContent).toContain('Hapus Credential');
-    expect(rows[1].textContent).not.toContain('Hapus Credential');
+    const button = rows[0].querySelector('[data-delete-credential]') as HTMLButtonElement;
+    expect(button).not.toBeNull();
+    expect(button.textContent!.trim()).toBe(''); // an icon, no text
+    expect(button.getAttribute('aria-label')).toBe('Hapus credential');
+    expect(rows[1].querySelector('[data-delete-credential]')).toBeNull();
   });
 
   it('asks for confirmation before deleting a credential, and does nothing if cancelled', async () => {
@@ -201,7 +205,7 @@ describe('AdminUsersComponent', () => {
     adminService.listUsers.and.returnValue(of({ users: [a, b] }));
     fixture.detectChanges();
 
-    fixture.componentInstance['query'] = 'bob';
+    fixture.componentInstance['onQuery']('bob');
     fixture.detectChanges();
 
     const rows = fixture.nativeElement.querySelectorAll('tbody tr');
@@ -232,7 +236,8 @@ describe('AdminUsersComponent', () => {
 
     it('has an Atur link to the detail page', () => {
       const link = fixture.nativeElement.querySelector('.actions a') as HTMLAnchorElement;
-      expect(link.textContent).toContain('Atur');
+      expect(link.getAttribute('aria-label')).toBe('Atur user');
+      expect(link.textContent!.trim()).toBe('');
       expect(link.getAttribute('href')).toBe('/admin/users/2');
     });
   });
@@ -280,8 +285,8 @@ describe('AdminUsersComponent', () => {
     it('lets the owner promote and demote, but not on his own row', () => {
       load();
       expect(rowOf(1).querySelector('[data-toggle-admin]')).toBeNull();
-      expect(rowOf(2).querySelector('[data-toggle-admin]')?.textContent).toContain('Cabut Admin');
-      expect(rowOf(3).querySelector('[data-toggle-admin]')?.textContent).toContain('Jadikan Admin');
+      expect(rowOf(2).querySelector('[data-toggle-admin]')?.getAttribute('aria-label')).toBe('Cabut Admin');
+      expect(rowOf(3).querySelector('[data-toggle-admin]')?.getAttribute('aria-label')).toBe('Jadikan Admin');
     });
 
     it('promotes after confirmation and reloads the list', async () => {
@@ -327,16 +332,177 @@ describe('AdminUsersComponent', () => {
         const owner = rowOf(1);
         expect((owner.querySelector('.inline-edit input') as HTMLInputElement).disabled).toBeTrue();
         expect((owner.querySelector('.inline-edit .icon-btn') as HTMLButtonElement).disabled).toBeTrue();
-        expect((owner.querySelector('.btn-danger-ghost') as HTMLButtonElement).disabled).toBeTrue();
+        expect((owner.querySelector('[data-delete-credential]') as HTMLButtonElement).disabled).toBeTrue();
         expect((owner.querySelector('.action-row .icon-btn.danger') as HTMLButtonElement).disabled).toBeTrue();
-        const buttons = Array.from(owner.querySelectorAll('.action-row button.btn')) as HTMLButtonElement[];
+        const buttons = Array.from(owner.querySelectorAll('.action-row button')) as HTMLButtonElement[];
+        expect(buttons.length).toBeGreaterThan(0);
         expect(buttons.every((b) => b.disabled)).toBeTrue();
-        expect(owner.querySelector('.action-row a.btn')).withContext('the owner page can still be opened to read').not.toBeNull();
+        expect(owner.querySelector('.action-row a.icon-btn')).withContext('the owner page can still be opened to read').not.toBeNull();
 
         const other = rowOf(3);
         expect((other.querySelector('.action-row .icon-btn.danger') as HTMLButtonElement).disabled).toBeFalse();
         expect((other.querySelector('.inline-edit input') as HTMLInputElement).disabled).toBeFalse();
       });
+    });
+  });
+
+  describe('filters, icon actions and pagination', () => {
+    const mk = (id: number, over: Partial<UserRow> = {}): UserRow => ({
+      userId: id, email: `user${String(id).padStart(2, '0')}@esb.co.id`, userName: `User ${id}`, flagActive: true, createdDate: '', jiraAccountId: 'acc',
+      hasCredential: false, credentialMasked: '', chatAppActivated: true, chatAppActivatedDate: null, chatSender: null, effectiveChatSender: 'operator',
+      isAdmin: false, isOwner: false, ...over,
+    });
+    const el = () => fixture.nativeElement as HTMLElement;
+    const q = (s: string) => el().querySelector(s) as HTMLElement | null;
+    const emails = () => Array.from(el().querySelectorAll('tbody tr')).map((r) => r.querySelector('strong')!.textContent!.trim());
+    const load = (users: UserRow[]) => {
+      adminService.listUsers.and.returnValue(of({ users }));
+      localStorage.removeItem('nudge.adminUsers.pageSize');
+      fixture.detectChanges();
+    };
+    const twenty = () => Array.from({ length: 20 }, (_, i) => mk(i + 1));
+
+    it('every action is an icon button with a tooltip and an accessible name, never text', () => {
+      load([mk(1)]);
+      const buttons = Array.from(el().querySelectorAll('.action-row .icon-btn')) as HTMLElement[];
+      expect(buttons.length).toBeGreaterThanOrEqual(3);
+      for (const b of buttons) {
+        expect(b.textContent!.trim()).withContext(b.outerHTML).toBe('');
+        expect(b.getAttribute('aria-label')).toBeTruthy();
+        expect(b.getAttribute('title')).toBeTruthy();
+        expect(b.querySelector('app-icon')).not.toBeNull();
+      }
+      expect(el().querySelector('.action-row .btn')).toBeNull();
+    });
+
+    it('the active/inactive icon says what it will do', () => {
+      load([mk(1), mk(2, { flagActive: false })]);
+      expect(q('tr[data-user-id="1"] [data-act="toggle-active"]')!.getAttribute('aria-label')).toBe('Nonaktifkan user');
+      expect(q('tr[data-user-id="2"] [data-act="toggle-active"]')!.getAttribute('aria-label')).toBe('Aktifkan user');
+    });
+
+    it('counts users in the tabs and filters by them, with the search narrowing the counts', () => {
+      load([mk(1), mk(2, { chatAppActivated: false }), mk(3, { flagActive: false }), mk(4, { chatAppActivated: false })]);
+      const count = (name: string) => Number(q(`[data-filter="${name}"] .seg-count`)!.textContent);
+      expect([count('all'), count('notActivated'), count('inactive')]).toEqual([4, 2, 1]);
+      expect(q('[data-filter="all"]')!.classList).toContain('on');
+
+      (q('[data-filter="inactive"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(emails()).toEqual(['user03@esb.co.id']);
+
+      (q('[data-filter="notActivated"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(emails()).toEqual(['user02@esb.co.id', 'user04@esb.co.id']);
+
+      fixture.componentInstance['onQuery']('user04');
+      fixture.detectChanges();
+      expect(emails()).toEqual(['user04@esb.co.id']);
+      expect([count('all'), count('notActivated'), count('inactive')]).toEqual([1, 1, 0]);
+    });
+
+    it('searches the name as well as the email', () => {
+      load([mk(1, { userName: 'Alice Wong' }), mk(2, { userName: 'Bob' })]);
+      fixture.componentInstance['onQuery']('alice');
+      fixture.detectChanges();
+      expect(emails()).toEqual(['user01@esb.co.id']);
+    });
+
+    it('cuts the list into pages of 8 by default, with the range and the page numbers', () => {
+      load(twenty());
+      expect(emails().length).toBe(8);
+      expect(emails()[0]).toBe('user01@esb.co.id');
+      expect(q('[data-range]')!.textContent).toContain('1–8 dari 20');
+      expect(Array.from(el().querySelectorAll('[data-page]')).map((b) => b.textContent!.trim())).toEqual(['1', '2', '3']);
+      expect(q('[data-page="1"]')!.getAttribute('aria-current')).toBe('page');
+      expect((q('[data-prev]') as HTMLButtonElement).disabled).toBeTrue();
+    });
+
+    it('moves between pages with the numbers and the arrows', () => {
+      load(twenty());
+      (q('[data-next]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(emails()[0]).toBe('user09@esb.co.id');
+      expect(q('[data-range]')!.textContent).toContain('9–16 dari 20');
+      (q('[data-page="3"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(emails()).toEqual(['user17@esb.co.id', 'user18@esb.co.id', 'user19@esb.co.id', 'user20@esb.co.id']);
+      expect(q('[data-range]')!.textContent).toContain('17–20 dari 20');
+      expect((q('[data-next]') as HTMLButtonElement).disabled).toBeTrue();
+      (q('[data-prev]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      expect(emails()[0]).toBe('user09@esb.co.id');
+    });
+
+    it('goes back to page 1 when the filter or the search changes, and never stays past the end', () => {
+      load(twenty());
+      (q('[data-page="3"]') as HTMLButtonElement).click();
+      fixture.detectChanges();
+      fixture.componentInstance['onQuery']('user1');
+      fixture.detectChanges();
+      expect(q('[data-page="1"]')!.getAttribute('aria-current')).toBe('page');
+      expect(emails()[0]).toBe('user10@esb.co.id');
+
+      // 10 users match "user1" (user10–19): two pages. A stale page 99 falls back to the last one.
+      fixture.componentInstance['page'] = 99;
+      fixture.detectChanges();
+      expect(emails().length).toBe(2);
+      expect(fixture.componentInstance['currentPage']).toBe(2);
+    });
+
+    it('lets the admin pick how many rows a page has, and remembers it', () => {
+      load(twenty());
+      fixture.componentInstance['setPageSize'](5);
+      fixture.detectChanges();
+      expect(emails().length).toBe(5);
+      expect(q('[data-range]')!.textContent).toContain('1–5 dari 20');
+      // 4 pages: 1 2 … 4 (only the neighbours of the current page are listed).
+      expect(Array.from(el().querySelectorAll('[data-page]')).map((n) => n.textContent!.trim())).toEqual(['1', '2', '4']);
+      expect(el().querySelectorAll('.pager-gap').length).toBe(1);
+      expect(localStorage.getItem('nudge.adminUsers.pageSize')).toBe('5');
+      localStorage.removeItem('nudge.adminUsers.pageSize');
+    });
+
+    it('shortens a long page list with gaps', () => {
+      load(Array.from({ length: 100 }, (_, i) => mk(i + 1)));
+      fixture.componentInstance['setPageSize'](5);
+      fixture.componentInstance['goTo'](10);
+      fixture.detectChanges();
+      expect(fixture.componentInstance['pageNumbers']).toEqual([1, null, 9, 10, 11, null, 20]);
+      localStorage.removeItem('nudge.adminUsers.pageSize');
+    });
+
+    it('shows no page arrows for a single page, only the range and the size', () => {
+      load([mk(1), mk(2)]);
+      expect(q('.pager-nav')).toBeNull();
+      expect(q('[data-range]')!.textContent).toContain('1–2 dari 2');
+      expect(q('[data-page-size]')).not.toBeNull();
+    });
+
+    it('has no pager when nothing matches', () => {
+      load([mk(1)]);
+      fixture.componentInstance['onQuery']('zzz');
+      fixture.detectChanges();
+      expect(q('[data-pager]')).toBeNull();
+      expect(q('.empty-row')!.textContent).toContain('Tidak ada user yang cocok dengan "zzz"');
+    });
+
+    it('opens the notActivated tab straight from the dashboard link (?chatApp=inactive)', async () => {
+      const route = TestBed.inject(ActivatedRoute);
+      (route.snapshot as { queryParamMap: unknown }).queryParamMap = convertToParamMap({ chatApp: 'inactive' });
+      adminService.listUsers.and.returnValue(of({ users: [mk(1), mk(2, { chatAppActivated: false })] }));
+      const f = TestBed.createComponent(AdminUsersComponent);
+      f.detectChanges();
+      expect((f.nativeElement.querySelector('[data-filter="notActivated"]') as HTMLElement).classList).toContain('on');
+      expect(f.nativeElement.querySelectorAll('tbody tr').length).toBe(1);
+    });
+
+    it('never scrolls: the table wrapper does not clip or scroll its content', () => {
+      load(twenty());
+      const wrap = q('.users-wrap')!;
+      expect(getComputedStyle(wrap).overflowX).not.toBe('auto');
+      expect(getComputedStyle(wrap).overflowX).not.toBe('scroll');
+      expect(getComputedStyle(q('table.users-table')!).tableLayout).toBe('fixed');
     });
   });
 });

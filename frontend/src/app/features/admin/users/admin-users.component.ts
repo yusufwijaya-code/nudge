@@ -8,12 +8,17 @@ import { ConfirmService } from '../../../core/ui/confirm.service';
 import { ToastService } from '../../../core/ui/toast.service';
 import { IconComponent } from '../../../shared/ui/icon.component';
 import { UserAvatarComponent, adminUserAvatarUrl } from '../../../shared/ui/user-avatar.component';
+import { SelectComponent, SelectOption } from '../../../shared/ui/select.component';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+
+export type UserFilter = 'all' | 'notActivated' | 'inactive';
+export const PAGE_SIZES = [5, 8, 10, 20];
+const PAGE_SIZE_KEY = 'nudge.adminUsers.pageSize';
 
 @Component({
   selector: 'app-admin-users',
   standalone: true,
-  imports: [NgFor, NgIf, FormsModule, RouterLink, IconComponent, UserAvatarComponent],
+  imports: [NgFor, NgIf, FormsModule, RouterLink, IconComponent, UserAvatarComponent, SelectComponent],
   templateUrl: './admin-users.component.html',
   styleUrl: './admin-users.component.scss',
 })
@@ -26,7 +31,10 @@ export class AdminUsersComponent implements OnInit {
   protected loading = true;
   protected error: string | null = null;
   protected query = '';
-  protected onlyNotActivated = false;
+  protected filter: UserFilter = 'all';
+  protected page = 1;
+  protected pageSize = this.storedPageSize();
+  protected readonly pageSizeOptions: SelectOption<number>[] = PAGE_SIZES.map((n) => ({ value: n, label: `${n} baris` }));
   protected rowActionInFlight: Record<number, boolean> = {};
   protected rowMessage: Record<number, string> = {};
   protected jiraAccountIdDrafts: Record<number, string> = {};
@@ -55,18 +63,99 @@ export class AdminUsersComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.onlyNotActivated = this.route.snapshot.queryParamMap.get('chatApp') === 'inactive';
+    if (this.route.snapshot.queryParamMap.get('chatApp') === 'inactive') this.filter = 'notActivated';
     if (!this.chatApp.status()) {
       this.chatApp.load().subscribe({ error: () => undefined });
     }
     this.loadUsers();
   }
 
-  protected get filteredUsers(): UserRow[] {
+  private matches(u: UserRow, filter: UserFilter): boolean {
+    switch (filter) {
+      case 'notActivated': return u.flagActive && !u.chatAppActivated;
+      case 'inactive': return !u.flagActive;
+      default: return true;
+    }
+  }
+
+  /** The search narrows the list first; the tabs count within it. */
+  private get searched(): UserRow[] {
     const q = this.query.trim().toLowerCase();
-    return this.users.filter(
-      (u) => (!q || u.email.toLowerCase().includes(q)) && (!this.onlyNotActivated || (u.flagActive && !u.chatAppActivated)),
-    );
+    return q ? this.users.filter((u) => u.email.toLowerCase().includes(q) || (u.userName ?? '').toLowerCase().includes(q)) : this.users;
+  }
+
+  protected count(filter: UserFilter): number {
+    return this.searched.filter((u) => this.matches(u, filter)).length;
+  }
+
+  protected get filteredUsers(): UserRow[] {
+    return this.searched.filter((u) => this.matches(u, this.filter));
+  }
+
+  protected setFilter(filter: UserFilter): void {
+    this.filter = filter;
+    this.page = 1;
+  }
+
+  protected onQuery(value: string): void {
+    this.query = value;
+    this.page = 1;
+  }
+
+  // ---- pagination: no scrolling, the list is cut into pages ----
+
+  protected get totalPages(): number {
+    return Math.max(1, Math.ceil(this.filteredUsers.length / this.pageSize));
+  }
+
+  /** The page in range, also after a delete or a filter made the list shorter. */
+  protected get currentPage(): number {
+    return Math.min(Math.max(1, this.page), this.totalPages);
+  }
+
+  protected get pagedUsers(): UserRow[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.filteredUsers.slice(start, start + this.pageSize);
+  }
+
+  protected get rangeLabel(): string {
+    const total = this.filteredUsers.length;
+    if (total === 0) return '';
+    const start = (this.currentPage - 1) * this.pageSize + 1;
+    return `${start}–${Math.min(total, start + this.pageSize - 1)} dari ${total}`;
+  }
+
+  /** 1 … 4 5 6 … 12: the first, the last and the neighbours of the current page. */
+  protected get pageNumbers(): (number | null)[] {
+    const total = this.totalPages;
+    const current = this.currentPage;
+    const shown = new Set([1, total, current - 1, current, current + 1].filter((n) => n >= 1 && n <= total));
+    const out: (number | null)[] = [];
+    let last = 0;
+    for (const n of [...shown].sort((a, b) => a - b)) {
+      if (n - last > 1) out.push(null);
+      out.push(n);
+      last = n;
+    }
+    return out;
+  }
+
+  protected goTo(page: number): void {
+    this.page = Math.min(Math.max(1, page), this.totalPages);
+  }
+
+  protected setPageSize(size: number): void {
+    this.pageSize = size;
+    this.page = 1;
+    try { localStorage.setItem(PAGE_SIZE_KEY, String(size)); } catch { /* storage unavailable: the choice just is not kept */ }
+  }
+
+  private storedPageSize(): number {
+    try {
+      const n = Number(localStorage.getItem(PAGE_SIZE_KEY));
+      if (PAGE_SIZES.includes(n)) return n;
+    } catch { /* storage unavailable */ }
+    return 8;
   }
 
   /** Row click → the user's detail page (settings, mute, credential). */

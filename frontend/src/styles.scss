@@ -2825,6 +2825,7 @@ table.admin-users {
 .ui-date-step { margin: 0 0 6px; font-size: 0.78rem; color: var(--text-muted); text-align: center; }
 .ui-date-footer { align-items: center; }
 .ui-date-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ui-date-head.dual { margin-bottom: 0; }
 .ui-date-title { font-size: 0.92rem; font-weight: 700; color: var(--ink); }
 .ui-date-nav {
   display: grid;
@@ -2840,6 +2841,16 @@ table.admin-users {
   &:hover { background: var(--primary-soft); color: var(--primary-strong); border-color: transparent; }
 }
 .ui-date-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.ui-date-months { display: flex; gap: 28px; }
+.ui-date-panel { flex: 1 1 0; min-width: 0; }
+.ui-date-panel-title { display: block; margin: -2px 0 6px; text-align: center; }
+.ui-date-blank { height: 36px; }
+// Two months side by side: the popup is as wide as both, and the arrows sit above the titles' row.
+.ui-date-popup.dual { width: 600px; max-width: calc(100vw - 32px); }
+.ui-date-head.dual { position: relative; z-index: 1; height: 0; margin: 0; padding: 0; overflow: visible;
+  .ui-date-navgroup { position: absolute; top: 0; }
+  .ui-date-navgroup:first-child { left: 0; }
+  .ui-date-navgroup:last-child { right: 0; } }
 .ui-date-weekday {
   padding: 6px 0;
   text-align: center;
@@ -2892,7 +2903,9 @@ table.admin-users {
   &:disabled { color: var(--text-faint); cursor: not-allowed; }
 }
 @media (max-width: 640px) {
-  .ui-date-popup { width: min(296px, calc(100vw - 32px)); }
+  .ui-date-popup, .ui-date-popup.dual { width: min(296px, calc(100vw - 32px)); }
+  // Not enough room for two months: the first one, with both arrows.
+  .ui-date-popup.dual .ui-date-panel + .ui-date-panel { display: none; }
 }
 
 /* Nudge Chat App activation (Tech Spec "Nudge sebagai Google Chat App") */

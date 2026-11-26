@@ -253,19 +253,17 @@ func (d *doc) meta() {
 	d.fill(cSurface)
 	d.draw(cBorder)
 	p.RoundedRect(margin, top, content, total, 2.5, "1234", "FD")
-	d.fill(cPrimary)
-	p.Rect(margin, top, 1.6, total, "F")
 
 	y := top + 2
 	for i, r := range rows {
 		d.font("B", 9)
 		d.text(cInk)
-		p.SetXY(margin+padX+1, y+1.5)
+		p.SetXY(margin+padX, y+1.5)
 		d.cell(labelW, lineH, r[0], "L", false)
 		d.font("", 9)
 		d.text(cInk)
-		p.SetXY(margin+padX+1+labelW, y+1.5)
-		d.para(margin+padX+1+labelW, valueW, lineH, r[1])
+		p.SetXY(margin+padX+labelW, y+1.5)
+		d.para(margin+padX+labelW, valueW, lineH, r[1])
 		y += heights[i]
 		if i < len(rows)-1 {
 			d.draw(cBorder)
@@ -298,8 +296,6 @@ func (d *doc) tiles(ts []tile, h float64) {
 		d.fill(t.bg)
 		d.draw(cBorder)
 		p.RoundedRect(x, top, w, h, 2.5, "1234", "FD")
-		d.fill(t.fg)
-		p.Rect(x, top+3, 1.2, h-6, "F")
 		d.text(cMuted)
 		d.font("B", 6.8)
 		p.SetXY(x+4, top+3.5)
@@ -596,8 +592,6 @@ func (d *doc) ticketCards() {
 		d.fill(bg)
 		d.draw(cBorder)
 		p.RoundedRect(margin, top, content, h, 2.5, "1234", "FD")
-		d.fill(fg)
-		p.Rect(margin, top, 1.6, h, "F")
 
 		// Header: key, result badge, title, facts.
 		d.text(cPrimary2)
